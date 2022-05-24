@@ -1,2 +1,4 @@
 quarry~=1.9.1
 Twisted~=22.4.0
+transmitm==0.1.0
+cryptography~=37.0.2
