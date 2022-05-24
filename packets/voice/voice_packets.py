@@ -7,7 +7,7 @@ from util import Buffer
 
 
 @dataclass
-class MicPacket(EncodableVoicePacket):
+class MicPacket(EncodableVoicePacket, DecodableVoicePacket):
     ID = 0x01
 
     data: bytes
@@ -17,6 +17,18 @@ class MicPacket(EncodableVoicePacket):
     def to_buf(self) -> bytes:
         return Buffer.pack_varint(len(self.data)) + self.data + \
                Buffer.pack("l?", self.sequence, self.whispering)
+
+    @classmethod
+    def from_buf(cls, buf: Buffer) -> 'MicPacket':
+        data_len = buf.unpack_varint()
+        data = buf.read(data_len)
+        (sequence, whispering) = buf.unpack("l?")
+
+        return cls(
+            data=data,
+            sequence=sequence,
+            whispering=whispering
+        )
 
 
 @dataclass
@@ -70,6 +82,9 @@ class Location(NamedTuple):
     y: float
     z: float
 
+    def __str__(self):
+        return f"({self.x}, {self.y}, {self.z})"
+
 
 @dataclass
 class LocationSoundPacket(SoundPacket, DecodableVoicePacket):
@@ -94,7 +109,7 @@ class LocationSoundPacket(SoundPacket, DecodableVoicePacket):
 
 
 @dataclass
-class AuthenticatePacket(EncodableVoicePacket):
+class AuthenticatePacket(EncodableVoicePacket, DecodableVoicePacket):
     ID = 0x05
 
     player_uuid: uuid.UUID
@@ -103,6 +118,16 @@ class AuthenticatePacket(EncodableVoicePacket):
     def to_buf(self) -> bytes:
         return Buffer.pack_uuid(self.player_uuid) + \
                Buffer.pack_uuid(self.secret)
+
+    @classmethod
+    def from_buf(cls, buf: Buffer) -> 'AuthenticatePacket':
+        player_uuid = buf.unpack_uuid()
+        secret = buf.unpack_uuid()
+
+        return cls(
+            player_uuid=player_uuid,
+            secret=secret
+        )
 
 
 @dataclass

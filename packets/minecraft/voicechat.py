@@ -28,13 +28,13 @@ class RequestSecretPacket(EncodablePacket, DecodablePacket):
 
 
 @dataclass
-class SecretPacket(DecodablePacket):
+class SecretPacket(EncodablePacket, DecodablePacket):
     CHANNEL = f"{NAMESPACE}:secret"
 
     secret: uuid.UUID
     port: int
     player: uuid.UUID
-    codec: int
+    codec: bytes
     mtu: int
     dist: float
     fade_dist: float
@@ -45,19 +45,28 @@ class SecretPacket(DecodablePacket):
     host: str
     allow_recording: bool
 
+    def to_buf(self) -> bytes:
+        return Buffer.pack_uuid(self.secret) + \
+               Buffer.pack("i", self.port) + \
+               Buffer.pack_uuid(self.player) + \
+               Buffer.pack("ciddddi?", self.codec, self.mtu, self.dist, self.fade_dist, self.crouch_dist,
+                           self.whisper_dist, self.keep_alive, self.groups_enabled) + \
+               Buffer.pack_string(self.host) + \
+               Buffer.pack("?", self.allow_recording)
+
     @classmethod
     def from_buf(cls, buff: Buffer) -> "SecretPacket":
         secret = buff.unpack_uuid()
         port = buff.unpack("i")
         player = buff.unpack_uuid()
-        codec = buff.read(1)[0]
-        mtu = buff.unpack("i")
-        dist = buff.unpack("d")
-        fade_dist = buff.unpack("d")
-        crouch_dist = buff.unpack("d")
-        whisper_dist = buff.unpack("d")
-        keep_alive = buff.unpack("i")
-        groups_enabled = buff.unpack("?")
+        (codec,
+         mtu,
+         dist,
+         fade_dist,
+         crouch_dist,
+         whisper_dist,
+         keep_alive,
+         groups_enabled) = buff.unpack("ciddddi?")
         host = buff.unpack_string()
         allow_recording = buff.unpack("?")
 
