@@ -1,0 +1,2 @@
+quarry~=1.9.1
+Twisted~=22.4.0
