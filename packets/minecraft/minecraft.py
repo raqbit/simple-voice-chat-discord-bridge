@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from typing import List
 
 from packets.encodable import Decodable
 from util import Buffer
@@ -11,7 +10,7 @@ NAMESPACE = "minecraft"
 class RegisterPacket(Decodable):
     CHANNEL = f"{NAMESPACE}:register"
 
-    channels: List[str]
+    channels: list[str]
 
     def to_buf(self) -> bytes:
         raise NotImplementedError

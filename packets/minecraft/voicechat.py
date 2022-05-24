@@ -2,8 +2,9 @@ import uuid
 from dataclasses import dataclass
 from typing import Optional, Dict
 
-from packets.encodable import Decodable, EncodablePacket, DecodablePacket
+from packets.encodable import Decodable
 from util import Buffer
+from packet import EncodablePacket, DecodablePacket
 
 NAMESPACE = "voicechat"
 
@@ -241,11 +242,11 @@ class LeaveGroupPacket(EncodablePacket, DecodablePacket):
     CHANNEL = f"{NAMESPACE}:leave_group"
 
     def to_buf(self) -> bytes:
-        pass
+        return b""
 
     @classmethod
-    def from_buf(cls, buf: Buffer) -> 'Decodable':
-        pass
+    def from_buf(cls, buf: Buffer) -> 'LeaveGroupPacket':
+        return cls()
 
 
 @dataclass
