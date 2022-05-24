@@ -2,9 +2,9 @@ import uuid
 from dataclasses import dataclass
 from typing import Optional, Dict
 
-from packets.encodable import Decodable
+from packets import Decodable
+from packets.minecraft import EncodablePacket, DecodablePacket
 from util import Buffer
-from packet import EncodablePacket, DecodablePacket
 
 NAMESPACE = "voicechat"
 

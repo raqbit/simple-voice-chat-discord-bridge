@@ -1,15 +1,13 @@
 from quarry.net.proxy import DownstreamFactory, Bridge
 from twisted.internet import reactor
 
-from packets.minecraft.minecraft import RegisterPacket, BrandPacket
-from packets.minecraft.voicechat import RequestSecretPacket, SecretPacket, PlayerStatePacket, PlayerStatesPacket, \
-    UpdateStatePacket, \
-    JoinedGroupPacket, CreateGroupPacket, JoinGroupPacket, LeaveGroupPacket
+from packets.minecraft import RegisterPacket, BrandPacket, RequestSecretPacket, SecretPacket, PlayerStatePacket, \
+    PlayerStatesPacket, UpdateStatePacket, JoinedGroupPacket, CreateGroupPacket, JoinGroupPacket, LeaveGroupPacket
 from util import Buffer
 
 
 # Upstream = server, downstream = client
-class QuietBridge(Bridge):
+class MinecraftProxyBridge(Bridge):
     def packet_upstream_plugin_message(self, buf: Buffer):
         buf.save()
         channel = buf.unpack_string()
@@ -63,8 +61,8 @@ class QuietBridge(Bridge):
             print(JoinedGroupPacket.from_buf(buf))
 
 
-class QuietDownstreamFactory(DownstreamFactory):
-    bridge_class = QuietBridge
+class MinecraftDownstreamFactory(DownstreamFactory):
+    bridge_class = MinecraftProxyBridge
     motd = "Proxy Server"
     online_mode = False
 
@@ -80,7 +78,7 @@ def main(argv):
     args = parser.parse_args(argv)
 
     # Create factory
-    factory = QuietDownstreamFactory()
+    factory = MinecraftDownstreamFactory()
     factory.connect_host = args.connect_host
     factory.connect_port = args.connect_port
 

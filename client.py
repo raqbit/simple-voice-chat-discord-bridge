@@ -4,9 +4,8 @@ from quarry.net import auth
 from quarry.net.client import ClientFactory, SpawningClientProtocol
 from twisted.internet import reactor
 
-from packets.encodable import EncodablePacket
-from packets.minecraft.minecraft import RegisterPacket, BrandPacket
-from packets.minecraft.voicechat import RequestSecretPacket, UpdateStatePacket, SecretPacket, CreateGroupPacket
+from packets.minecraft import EncodablePacket, RegisterPacket, BrandPacket, RequestSecretPacket, UpdateStatePacket, \
+    SecretPacket, CreateGroupPacket
 from util import Buffer
 
 compat_version = 14
