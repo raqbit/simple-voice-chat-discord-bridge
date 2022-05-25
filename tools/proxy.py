@@ -7,10 +7,10 @@ from twisted.internet import reactor
 
 from packets.minecraft import RegisterPacket, BrandPacket, RequestSecretPacket, SecretPacket, PlayerStatePacket, \
     PlayerStatesPacket, UpdateStatePacket, JoinedGroupPacket, CreateGroupPacket, JoinGroupPacket, LeaveGroupPacket, \
-    EncodablePacket
+    EncodablePacket, PlayerState
 from packets.voice import MicPacket, KeepAlivePacket, PingPacket, PlayerSoundPacket, GroupSoundPacket, \
     LocationSoundPacket, AuthenticatePacket, AuthenticateAckPacket
-from packets.voice.message import NetworkMessage
+from packets.voice.message import decode_voice_packet, decode_client_sent_voice_packet
 from util import Buffer
 
 
@@ -18,26 +18,37 @@ class VoiceInterceptor(Tap):
     interceptor_port: int
     downstream_port: int
 
-    # FIXME: secret is unique per connection, so this will corrupt older connections when a new one comes in
-    # FIXME: make this a dictionary from player uuid to secret
-    secret: uuid.UUID
+    secrets: dict[uuid.UUID, uuid.UUID]
 
     cipher: Cipher
 
     def __init__(self, interceptor_port: int):
         self.interceptor_port = interceptor_port
+        self.secrets = {}
+        self._peer_to_player = {}
 
     def handle(self, data, ip_tuple):
         peer, proxy = ip_tuple
 
-        full_buf = Buffer(data)
+        buf = Buffer(data)
 
         is_downstream = peer[1] == self.downstream_port
 
         if is_downstream:
-            payload = NetworkMessage.from_buf(full_buf, self.secret)
+            # We're receiving a server-sent packet, so we need to figure out
+            # which client we're receiving for so that we can figure out the
+            # correct player uuid, which we can then use to obtain the right secret
+            #
+            # Sadly, this is not possible with the transmitm package, as the source-ports
+            # it uses for communicating with upstream cannot be defined nor retrieved, so when we
+            # receive packets we are unable to match them to the client.
+            # So, as a hack, this assumes the first secret is the secret to use, which works for 1-client proxy
+            # scenarios
+            payload = decode_voice_packet(buf, list(self.secrets.values())[0])
         else:
-            payload = NetworkMessage.from_client_buf(full_buf, self.secret)
+            # We're receiving a client-sent packet, so we pass in all the secrets
+            # and the function will read the sender-id to get the appropriate secret
+            (sender, payload) = decode_client_sent_voice_packet(buf, self.secrets)
 
         arrow = ">>"
 
@@ -65,10 +76,10 @@ class VoiceInterceptor(Tap):
             pkt = AuthenticatePacket.from_buf(payload)
             print(f"{prefix} Authenticate player={pkt.player_uuid} secret={pkt.secret}")
         if packet_type == AuthenticateAckPacket.ID:
-            pkt = AuthenticateAckPacket.from_buf(payload)
             print(f"{prefix} AuthenticateAck")
         if packet_type == PingPacket.ID:
-            print(f"{prefix} Ping")
+            pkt = PingPacket.from_buf(payload)
+            print(f"{prefix} Ping id={pkt.id} timestamp={pkt.timestamp}")
         if packet_type == KeepAlivePacket.ID:
             print(f"{prefix} KeepAlive")
 
@@ -79,6 +90,8 @@ class VoiceInterceptor(Tap):
 class MinecraftProxyBridge(Bridge):
     _voice_interceptor: VoiceInterceptor
 
+    _prefix = "⛏️"
+
     def __init__(self, downstream_factory, downstream):
         super().__init__(downstream_factory, downstream)
 
@@ -87,9 +100,8 @@ class MinecraftProxyBridge(Bridge):
     def packet_upstream_plugin_message(self, buf: Buffer):
         buf.save()
         channel = buf.unpack_string()
-        print(f" >> plugin:{channel}")
 
-        self._handle_upstream(channel, buf)
+        self._handle_upstream(channel, buf, f"{self._prefix} >>")
 
         buf.restore()
         self.upstream.send_packet("plugin_message", buf.read())
@@ -97,52 +109,82 @@ class MinecraftProxyBridge(Bridge):
     def packet_downstream_plugin_message(self, buf: Buffer):
         buf.save()
         channel = buf.unpack_string()
-        print(f" << plugin:{channel}")
 
-        self._handle_downstream(channel, buf)
+        self._handle_downstream(channel, buf, f"{self._prefix} <<")
 
     @staticmethod
-    def _handle_upstream(channel: str, buf: Buffer):
+    def _handle_upstream(channel: str, buf: Buffer, prefix: str):
         if channel == RegisterPacket.CHANNEL:
-            print(RegisterPacket.from_buf(buf))
+            pkt = RegisterPacket.from_buf(buf)
+            print(f"{prefix} Register channels=[{', '.join(pkt.channels)}]")
         elif channel == BrandPacket.CHANNEL:
-            print(BrandPacket.from_buf(buf))
+            pkt = BrandPacket.from_buf(buf)
+            print(f"{prefix} Brand brand={pkt.brand}")
         elif channel == UpdateStatePacket.CHANNEL:
-            print(UpdateStatePacket.from_buf(buf))
+            pkt = UpdateStatePacket.from_buf(buf)
+            print(f"{prefix} UpdateState disabled={pkt.disabled} disconnected={pkt.disconnected}")
         elif channel == RequestSecretPacket.CHANNEL:
-            print(RequestSecretPacket.from_buf(buf))
+            pkt = RequestSecretPacket.from_buf(buf)
+            print(f"{prefix} RequestSecret compat_version={pkt.compat_version}")
         elif channel == CreateGroupPacket.CHANNEL:
-            print(CreateGroupPacket.from_buf(buf))
+            pkt = CreateGroupPacket.from_buf(buf)
+            print(f"{prefix} CreateGroup name={pkt.name} password={pkt.password}")
         elif channel == JoinGroupPacket.CHANNEL:
-            print(JoinGroupPacket.from_buf(buf))
+            pkt = JoinGroupPacket.from_buf(buf)
+            print(f"{prefix} JoinGroup group={pkt.group} password={pkt.password}")
         elif channel == LeaveGroupPacket.CHANNEL:
+            print(f"{prefix} LeaveGroup")
             pass
 
-    def _handle_downstream(self, channel: str, buf: Buffer):
+    def _handle_downstream(self, channel: str, buf: Buffer, prefix: str):
         if channel == RegisterPacket.CHANNEL:
-            print(RegisterPacket.from_buf(buf))
+            pkt = RegisterPacket.from_buf(buf)
+            print(f"{prefix} Register channels=[{', '.join(pkt.channels)}]")
         elif channel == BrandPacket.CHANNEL:
-            print(BrandPacket.from_buf(buf))
+            pkt = BrandPacket.from_buf(buf)
+            print(f"{prefix} Brand brand={pkt.brand}")
         elif channel == SecretPacket.CHANNEL:
-            self._intercept_voice(buf)
+            pkt = SecretPacket.from_buf(buf)
+            print(
+                (
+                    f"{prefix} Secret "
+                    f"secret={pkt.secret} "
+                    f"port={pkt.port} "
+                    f"codec={pkt.codec} "
+                    f"mtu={pkt.mtu} "
+                    f"dist={pkt.dist} "
+                    f"fade_dist={pkt.fade_dist} "
+                    f"crouch_dist={pkt.crouch_dist} "
+                    f"whisper_dist={pkt.whisper_dist} "
+                    f"keep_alive={pkt.keep_alive} "
+                    f"groups_enabled={pkt.groups_enabled}"
+                ))
+            self._intercept_voice(pkt)
             return
         elif channel == PlayerStatesPacket.CHANNEL:
-            print(PlayerStatesPacket.from_buf(buf))
+            pkt = PlayerStatesPacket.from_buf(buf)
+            states = ' '.join([f"{player}=({self._format_player_state(state)})"
+                               for player, state in pkt.states.items()])
+            print(
+                f"{prefix} PlayerStates {states}")
         elif channel == PlayerStatePacket.CHANNEL:
-            print(PlayerStatePacket.from_buf(buf))
+            pkt = PlayerStatePacket.from_buf(buf)
+            print(f"{prefix} PlayerState {self._format_player_state(pkt.state)}")
         elif channel == JoinedGroupPacket.CHANNEL:
-            print(JoinedGroupPacket.from_buf(buf))
+            pkt = JoinedGroupPacket.from_buf(buf)
+            print(f"{prefix} JoinedGroup group={pkt.group} wrong_password={pkt.wrong_password}")
 
         # Passthrough un-handled messages
         buf.restore()
         self.downstream.send_packet("plugin_message", buf.read())
 
-    def _intercept_voice(self, buf: Buffer):
-        pkt = SecretPacket.from_buf(buf)
-        print(pkt)
+    @staticmethod
+    def _format_player_state(state: PlayerState) -> str:
+        return f'name={state.name} disabled={state.disabled} disconnected={state.disconnected}'
 
+    def _intercept_voice(self, pkt: SecretPacket):
         # Setup proxy with connection secret & port of udp voice listener
-        self._voice_interceptor.secret = pkt.secret
+        self._voice_interceptor.secrets[pkt.player] = pkt.secret
         self._voice_interceptor.downstream_port = pkt.port
         pkt.port = self._voice_interceptor.interceptor_port
         self._send_plugin_message(pkt)
