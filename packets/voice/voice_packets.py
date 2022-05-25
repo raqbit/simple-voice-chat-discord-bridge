@@ -16,13 +16,13 @@ class MicPacket(EncodableVoicePacket, DecodableVoicePacket):
 
     def to_buf(self) -> bytes:
         return Buffer.pack_varint(len(self.data)) + self.data + \
-               Buffer.pack("l?", self.sequence, self.whispering)
+               Buffer.pack("q?", self.sequence, self.whispering)
 
     @classmethod
     def from_buf(cls, buf: Buffer) -> 'MicPacket':
         data_len = buf.unpack_varint()
         data = buf.read(data_len)
-        (sequence, whispering) = buf.unpack("l?")
+        (sequence, whispering) = buf.unpack("q?")
 
         return cls(
             data=data,
@@ -49,7 +49,7 @@ class PlayerSoundPacket(SoundPacket, DecodableVoicePacket):
         sender = buf.unpack_uuid()
         data_len = buf.unpack_varint()
         data = buf.read(data_len)
-        (sequence, whispering) = buf.unpack("l?")
+        (sequence, whispering) = buf.unpack("q?")
 
         return cls(
             sender=sender,
@@ -68,7 +68,7 @@ class GroupSoundPacket(SoundPacket, DecodableVoicePacket):
         sender = buf.unpack_uuid()
         data_len = buf.unpack_varint()
         data = buf.read(data_len)
-        sequence = buf.unpack("l")
+        sequence = buf.unpack("q")
 
         return cls(
             sender=sender,
@@ -98,7 +98,7 @@ class LocationSoundPacket(SoundPacket, DecodableVoicePacket):
         location = Location(*buf.unpack("ddd"))
         data_len = buf.unpack_varint()
         data = buf.read(data_len)
-        sequence = buf.unpack("l")
+        sequence = buf.unpack("q")
 
         return cls(
             sender=sender,
@@ -147,12 +147,12 @@ class PingPacket(EncodableVoicePacket, DecodableVoicePacket):
     timestamp: int
 
     def to_buf(self) -> bytes:
-        return Buffer.pack_uuid(self.id) + Buffer.pack("l", self.timestamp)
+        return Buffer.pack_uuid(self.id) + Buffer.pack("q", self.timestamp)
 
     @classmethod
     def from_buf(cls, buf: Buffer) -> 'PingPacket':
         ping_id = buf.unpack_uuid()
-        timestamp = buf.unpack("l")
+        timestamp = buf.unpack("q")
 
         return cls(
             id=ping_id,
