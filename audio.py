@@ -43,7 +43,7 @@ class VoiceChatAudioDecoder:
 
 
 class VoiceChatAudioEncoder:
-    def __init(self, application: str):
+    def __init__(self, application: str):
         self.encoder = opuslib.Encoder(_SAMPLE_RATE, 1, application)
 
     def encode(self, data: bytes) -> bytes:

@@ -4,10 +4,11 @@ import uuid
 from typing import Callable, Optional
 
 import discord
+from opuslib import APPLICATION_VOIP
 from twisted.internet import asyncioreactor
 
 # Create event loop
-from audio import VoiceChatAudioDecoder
+from audio import VoiceChatAudioDecoder, VoiceChatAudioEncoder
 
 loop = asyncio.new_event_loop()
 asyncio.set_event_loop(loop)
@@ -57,6 +58,7 @@ class VoiceConnection(DatagramProtocol):
         self.on_connected = on_connected
 
         self.decoder = VoiceChatAudioDecoder()
+        self.encoder = VoiceChatAudioEncoder(application=APPLICATION_VOIP)
 
         self.mic_sequence = 0
 
@@ -69,8 +71,11 @@ class VoiceConnection(DatagramProtocol):
         :param data:
         :return:
         """
-        pkt = MicPacket(data, False, self.mic_sequence)
+        encoded_data = self.encoder.encode(data)
+        pkt = MicPacket(encoded_data, False, self.mic_sequence)
         self.mic_sequence += 1
+
+        print("Sending voice!!")
 
         self._send_packet(pkt)
 
@@ -120,6 +125,15 @@ class MinecraftClient(SpawningClientProtocol):
         self.server_host = host
         self.voice = None
         self.voice_listener = None
+
+    def send_voice_data(self, data: bytes):
+        if self.voice is not None:
+            self.voice.send_voice(data)
+
+    def connection_made(self):
+        super().connection_made()
+        factory: MinecraftClientFactory = self.factory
+        factory.client = self
 
     def player_joined(self):
         super().player_joined()
@@ -190,15 +204,21 @@ class MinecraftClient(SpawningClientProtocol):
 
 class MinecraftClientFactory(ClientFactory):
     protocol = MinecraftClient
-
     server_host: str
+
+    client: Optional[MinecraftClient]
 
     def __init__(self, host):
         super().__init__(auth.OfflineProfile("Raqbot"))
+        self.client = None
         self.server_host = host
 
     def buildProtocol(self, addr):
         return self.protocol(self, addr, self.server_host)
+
+    def send_voice_data(self, data):
+        if self.client is not None:
+            self.client.send_voice_data(data)
 
 
 def main(argv):
@@ -218,7 +238,7 @@ def main(argv):
 
     discord_bot = discord.Bot()
 
-    setup_commands(discord_bot)
+    setup_commands(discord_bot, minecraft.send_voice_data)
 
     # Start discord bot
     loop.create_task(discord_bot.start(bot_token))

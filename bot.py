@@ -1,8 +1,28 @@
+from typing import Callable
+
 import discord.client
-from discord import slash_command, ApplicationContext, option, VoiceClient
+from discord import slash_command, ApplicationContext, option, VoiceClient, sinks
+
+
+class VoiceBridgeAudioSink(sinks.Sink):
+    _on_voice_received: Callable[[bytes], None]
+
+    def __init__(self, on_voice_received: Callable[[bytes], None]):
+        super().__init__(filters=None)
+        self._on_voice_received = on_voice_received
+
+    def write(self, data, user):
+        print(f"Got data {len(data)}")
+        self._on_voice_received(data)
 
 
 class VoiceBridgeCog(discord.Cog):
+    sink: VoiceBridgeAudioSink
+
+    def __init__(self, on_voice_received: Callable):
+        self.sink = VoiceBridgeAudioSink(on_voice_received)
+        pass
+
     @slash_command(name="join", description="Makes the bot join the given voice chat", guild_ids=['272461623241736193'])
     @option("channel", description="Select a channel")
     async def on_join_command(self, ctx: ApplicationContext,
@@ -14,7 +34,10 @@ class VoiceBridgeCog(discord.Cog):
         if not voice:
             raise Exception("No voice client after connecting")
 
-        # voice.play()
+        voice.start_recording(self.sink, self._on_voice_recording_stop)
+
+    async def _on_voice_recording_stop(self, sink: VoiceBridgeAudioSink):
+        print("Stopped recording")
 
     @slash_command(name="leave", guild_ids=['272461623241736193'])
     async def on_leave_command(self, ctx: ApplicationContext):
@@ -25,5 +48,5 @@ class VoiceBridgeCog(discord.Cog):
             await ctx.respond("Not connected to voice")
 
 
-def setup_commands(bot: discord.Bot):
-    bot.add_cog(VoiceBridgeCog())
+def setup_commands(bot: discord.Bot, on_voice_received: Callable[[bytes], None]):
+    bot.add_cog(VoiceBridgeCog(on_voice_received))
