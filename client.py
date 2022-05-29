@@ -4,6 +4,7 @@ import uuid
 from typing import Callable, Optional
 
 import discord
+from discord import VoiceClient
 from opuslib import APPLICATION_VOIP
 from twisted.internet import asyncioreactor
 
@@ -26,7 +27,7 @@ from bot import setup_commands
 from packets.minecraft import EncodablePacket, RegisterPacket, BrandPacket, RequestSecretPacket, UpdateStatePacket, \
     SecretPacket, CreateGroupPacket
 from packets.voice import KeepAlivePacket, EncodableVoicePacket, PingPacket, AuthenticatePacket, AuthenticateAckPacket, \
-    PlayerSoundPacket, MicPacket
+    PlayerSoundPacket, MicPacket, GroupSoundPacket
 from packets.voice.message import decode_voice_packet, encode_client_sent_voice_packet
 from util import Buffer
 
@@ -47,15 +48,18 @@ class VoiceConnection(DatagramProtocol):
     decoder: VoiceChatAudioDecoder
 
     on_connected: Callable
+    on_voice_data: Callable[[bytes], None]
 
     mic_sequence: int
 
-    def __init__(self, host: str, port: int, player_id: uuid.UUID, secret: uuid.UUID, on_connected: Callable):
+    def __init__(self, host: str, port: int, player_id: uuid.UUID, secret: uuid.UUID, on_connected: Callable,
+                 on_voice_data: Callable[[bytes], None]):
         self.host = host
         self.port = port
         self.player = player_id
         self.secret = secret
         self.on_connected = on_connected
+        self.on_voice_data = on_voice_data
 
         self.decoder = VoiceChatAudioDecoder()
         self.encoder = VoiceChatAudioEncoder(application=APPLICATION_VOIP)
@@ -75,8 +79,6 @@ class VoiceConnection(DatagramProtocol):
         pkt = MicPacket(encoded_data, False, self.mic_sequence)
         self.mic_sequence += 1
 
-        print("Sending voice!!")
-
         self._send_packet(pkt)
 
     def datagramReceived(self, datagram: bytes, addr: tuple):
@@ -91,11 +93,12 @@ class VoiceConnection(DatagramProtocol):
         if packet_type == AuthenticateAckPacket.ID:
             # Give connected callback
             self.on_connected()
-        if packet_type == PlayerSoundPacket.ID:
-            pkt = PlayerSoundPacket.from_buf(payload)
+        if packet_type == GroupSoundPacket.ID:
+            pkt = GroupSoundPacket.from_buf(payload)
             # TODO: use sequence info to re-order packets before sending them through to discord
             # TODO: for now, simply send them all to discord in whatever order they were received
             pcm_data = self.decoder.decode(pkt.data)
+            self.on_voice_data(pcm_data)
         if packet_type == KeepAlivePacket.ID:
             # Respond with keepalive
             self._send_packet(KeepAlivePacket())
@@ -169,6 +172,10 @@ class MinecraftClient(SpawningClientProtocol):
         self._vc_set_connected(True)
         self._vc_create_group("Discord Bridge")
 
+    def on_voice_data(self, data: bytes):
+        factory: MinecraftClientFactory = self.factory
+        factory.on_mc_voice_data(data)
+
     def _reconnect_voice(self, port: int, player: uuid.UUID, secret: uuid.UUID):
         # Disconnect old listener if there was one
         if self.voice_listener is not None:
@@ -180,7 +187,8 @@ class MinecraftClient(SpawningClientProtocol):
 
     def _create_new_voice_connection(self, port: int, player: uuid.UUID, secret: uuid.UUID):
         # Create new voice connection & start listening
-        self.voice = VoiceConnection(self.server_host, port, player, secret, self.on_voice_connected)
+        self.voice = VoiceConnection(self.server_host, port, player, secret, self.on_voice_connected,
+                                     self.on_voice_data)
         self.voice_listener = reactor.listenUDP(0, self.voice)
 
     def _vc_create_group(self, name: str):
@@ -205,6 +213,8 @@ class MinecraftClient(SpawningClientProtocol):
 class MinecraftClientFactory(ClientFactory):
     protocol = MinecraftClient
     server_host: str
+
+    on_mc_voice_data: Optional[Callable[[bytes], None]]
 
     client: Optional[MinecraftClient]
 
@@ -233,12 +243,20 @@ def main(argv):
     if bot_token is None:
         raise Exception("no discord bot token provided")
 
+    discord_bot = discord.Bot()
     minecraft = MinecraftClientFactory(args.host)
     minecraft.connect(args.host, args.port)
 
-    discord_bot = discord.Bot()
-
     setup_commands(discord_bot, minecraft.send_voice_data)
+
+    def on_mc_voice_data(data: bytes):
+        if len(discord_bot.voice_clients) > 0:
+            discord_voice_client: VoiceClient = discord_bot.voice_clients[0]
+            from discord import opus
+            discord_voice_client.encoder = opus.Encoder()
+            discord_voice_client.send_audio_packet(data, encode=True)
+
+    minecraft.on_mc_voice_data = on_mc_voice_data
 
     # Start discord bot
     loop.create_task(discord_bot.start(bot_token))

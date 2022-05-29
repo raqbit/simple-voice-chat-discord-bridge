@@ -12,7 +12,6 @@ class VoiceBridgeAudioSink(sinks.Sink):
         self._on_voice_received = on_voice_received
 
     def write(self, data, user):
-        print(f"Got data {len(data)}")
         self._on_voice_received(data)
 
 
@@ -36,7 +35,7 @@ class VoiceBridgeCog(discord.Cog):
 
         voice.start_recording(self.sink, self._on_voice_recording_stop)
 
-    async def _on_voice_recording_stop(self, sink: VoiceBridgeAudioSink):
+    async def _on_voice_recording_stop(self, _: VoiceBridgeAudioSink):
         print("Stopped recording")
 
     @slash_command(name="leave", guild_ids=['272461623241736193'])
