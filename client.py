@@ -1,15 +1,31 @@
+import asyncio
+import os
 import uuid
 from typing import Callable, Optional
 
+import discord
+from twisted.internet import asyncioreactor
+
+# Create event loop
+from audio import VoiceChatAudioDecoder
+
+loop = asyncio.new_event_loop()
+asyncio.set_event_loop(loop)
+
+# Install asyncio reactor to play nice with pycord
+asyncioreactor.install(loop)
+
+from twisted.internet import reactor
 from quarry.net import auth
 from quarry.net.client import ClientFactory, SpawningClientProtocol
-from twisted.internet import reactor
 from twisted.internet.interfaces import IAddress, IListeningPort
 from twisted.internet.protocol import DatagramProtocol
 
+from bot import setup_commands
 from packets.minecraft import EncodablePacket, RegisterPacket, BrandPacket, RequestSecretPacket, UpdateStatePacket, \
     SecretPacket, CreateGroupPacket
-from packets.voice import KeepAlivePacket, EncodableVoicePacket, PingPacket, AuthenticatePacket, AuthenticateAckPacket
+from packets.voice import KeepAlivePacket, EncodableVoicePacket, PingPacket, AuthenticatePacket, AuthenticateAckPacket, \
+    PlayerSoundPacket, MicPacket
 from packets.voice.message import decode_voice_packet, encode_client_sent_voice_packet
 from util import Buffer
 
@@ -27,7 +43,11 @@ class VoiceConnection(DatagramProtocol):
     player: uuid.UUID
     secret: uuid.UUID
 
+    decoder: VoiceChatAudioDecoder
+
     on_connected: Callable
+
+    mic_sequence: int
 
     def __init__(self, host: str, port: int, player_id: uuid.UUID, secret: uuid.UUID, on_connected: Callable):
         self.host = host
@@ -36,14 +56,23 @@ class VoiceConnection(DatagramProtocol):
         self.secret = secret
         self.on_connected = on_connected
 
+        self.decoder = VoiceChatAudioDecoder()
+
+        self.mic_sequence = 0
+
     def startProtocol(self):
-        reactor.resolve(self.host).addCallback(self.on_host_resolved)
+        reactor.resolve(self.host).addCallback(self._on_host_resolved)
 
-    def on_host_resolved(self, ip: str):
-        self.transport.connect(ip, self.port)
+    def send_voice(self, data: bytes):
+        """
+        Sends PCM-encoded
+        :param data:
+        :return:
+        """
+        pkt = MicPacket(data, False, self.mic_sequence)
+        self.mic_sequence += 1
 
-        # Authenticate
-        self._send_packet(AuthenticatePacket(self.player, self.secret))
+        self._send_packet(pkt)
 
     def datagramReceived(self, datagram: bytes, addr: tuple):
         buf = Buffer(datagram)
@@ -57,6 +86,11 @@ class VoiceConnection(DatagramProtocol):
         if packet_type == AuthenticateAckPacket.ID:
             # Give connected callback
             self.on_connected()
+        if packet_type == PlayerSoundPacket.ID:
+            pkt = PlayerSoundPacket.from_buf(payload)
+            # TODO: use sequence info to re-order packets before sending them through to discord
+            # TODO: for now, simply send them all to discord in whatever order they were received
+            pcm_data = self.decoder.decode(pkt.data)
         if packet_type == KeepAlivePacket.ID:
             # Respond with keepalive
             self._send_packet(KeepAlivePacket())
@@ -65,21 +99,31 @@ class VoiceConnection(DatagramProtocol):
             pkt = PingPacket.from_buf(payload)
             self._send_packet(PingPacket(pkt.id, pkt.timestamp))
 
+    def _on_host_resolved(self, ip: str):
+        self.transport.connect(ip, self.port)
+
+        # Authenticate
+        self._send_packet(AuthenticatePacket(self.player, self.secret))
+
     def _send_packet(self, packet: EncodableVoicePacket):
         buf = encode_client_sent_voice_packet(packet.ID, self.player, packet.to_buf(), self.secret)
         self.transport.write(buf)
 
 
-class VoiceChatClientProtocol(SpawningClientProtocol):
+class MinecraftClient(SpawningClientProtocol):
     server_host: str
     voice: Optional[VoiceConnection]
     voice_listener: Optional[IListeningPort]
 
-    def __init__(self, factory: 'VoiceChatClientFactory', addr: IAddress, host: str):
+    def __init__(self, factory: 'MinecraftClientFactory', addr: IAddress, host: str):
         super().__init__(factory, addr)
         self.server_host = host
         self.voice = None
         self.voice_listener = None
+
+    def player_joined(self):
+        super().player_joined()
+        print("Joined the game")
 
     def packet_update_health(self, buf: Buffer):
         health = buf.unpack("f")
@@ -144,8 +188,8 @@ class VoiceChatClientProtocol(SpawningClientProtocol):
         self.send_packet("plugin_message", Buffer.pack_string(packet.CHANNEL), packet.to_buf())
 
 
-class VoiceChatClientFactory(ClientFactory):
-    protocol = VoiceChatClientProtocol
+class MinecraftClientFactory(ClientFactory):
+    protocol = MinecraftClient
 
     server_host: str
 
@@ -164,9 +208,20 @@ def main(argv):
     parser.add_argument("-p", "--port", default=25565, type=int)
     args = parser.parse_args(argv)
 
-    factory = VoiceChatClientFactory(args.host)
+    bot_token = os.getenv("BOT_TOKEN")
 
-    factory.connect(args.host, args.port)
+    if bot_token is None:
+        raise Exception("no discord bot token provided")
+
+    minecraft = MinecraftClientFactory(args.host)
+    minecraft.connect(args.host, args.port)
+
+    discord_bot = discord.Bot()
+
+    setup_commands(discord_bot)
+
+    # Start discord bot
+    loop.create_task(discord_bot.start(bot_token))
 
     reactor.run()
 

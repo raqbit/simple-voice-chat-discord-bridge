@@ -3,3 +3,5 @@ Twisted~=22.4.0
 transmitm~=0.1.0
 cryptography~=37.0.2
 opuslib~=3.0.1
+py-cord~=2.0.0rc1
+PyNaCl~=1.5.0
