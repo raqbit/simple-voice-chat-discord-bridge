@@ -5,7 +5,7 @@ from quarry.net.proxy import DownstreamFactory, Bridge
 from transmitm import Tap, UDPProxy
 from twisted.internet import reactor
 
-from audio import VoiceChatAudioDecoder
+from audio import OpusDecoder
 from packets.minecraft import RegisterPacket, BrandPacket, RequestSecretPacket, SecretPacket, PlayerStatePacket, \
     PlayerStatesPacket, UpdateStatePacket, JoinedGroupPacket, CreateGroupPacket, JoinGroupPacket, LeaveGroupPacket, \
     EncodablePacket, PlayerState
@@ -23,12 +23,14 @@ class VoiceInterceptor(Tap):
 
     cipher: Cipher
 
+    decoder: OpusDecoder
+
     def __init__(self, interceptor_port: int):
         self.interceptor_port = interceptor_port
         self.secrets = {}
         self._peer_to_player = {}
 
-        self.audio_decoder = VoiceChatAudioDecoder()
+        self.decoder = OpusDecoder(48000, int((48000/1000)*20), 1)
 
     def handle(self, data, ip_tuple):
         peer, proxy = ip_tuple
@@ -64,8 +66,7 @@ class VoiceInterceptor(Tap):
         if packet_type == MicPacket.ID:
             pkt = MicPacket.from_buf(payload)
             print(f"{prefix} Mic len={len(pkt.data)} sequence={pkt.sequence} whispering={pkt.whispering}")
-            decoded_data = self.audio_decoder.decode(pkt.data)
-            print(decoded_data)
+            print(f"Decoded len: {len(self.decoder.decode(pkt.data))}")
         if packet_type == PlayerSoundPacket.ID:
             pkt = PlayerSoundPacket.from_buf(payload)
             print(

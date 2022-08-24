@@ -4,12 +4,11 @@ import uuid
 from typing import Callable, Optional
 
 import discord
-from discord import VoiceClient
-from opuslib import APPLICATION_VOIP
 from twisted.internet import asyncioreactor
-
 # Create event loop
-from audio import VoiceChatAudioDecoder, VoiceChatAudioEncoder
+from twisted.internet.defer import Deferred
+
+from audio import AudioProcessThread
 
 loop = asyncio.new_event_loop()
 asyncio.set_event_loop(loop)
@@ -24,10 +23,12 @@ from twisted.internet.interfaces import IAddress, IListeningPort
 from twisted.internet.protocol import DatagramProtocol
 
 from bot import setup_commands
-from packets.minecraft import EncodablePacket, RegisterPacket, BrandPacket, RequestSecretPacket, UpdateStatePacket, \
+from packets.minecraft import EncodablePacket, RegisterPacket, BrandPacket, RequestSecretPacket, \
+    UpdateStatePacket, \
     SecretPacket, CreateGroupPacket
-from packets.voice import KeepAlivePacket, EncodableVoicePacket, PingPacket, AuthenticatePacket, AuthenticateAckPacket, \
-    PlayerSoundPacket, MicPacket, GroupSoundPacket
+from packets.voice import KeepAlivePacket, EncodableVoicePacket, PingPacket, AuthenticatePacket, \
+    AuthenticateAckPacket, \
+    MicPacket, GroupSoundPacket
 from packets.voice.message import decode_voice_packet, encode_client_sent_voice_packet
 from util import Buffer
 
@@ -35,8 +36,8 @@ compat_version = 14
 
 used_plugin_channels = {'voicechat:player_state', 'voicechat:secret', 'voicechat:leave_group',
                         'voicechat:create_group', 'voicechat:request_secret', 'voicechat:set_group',
-                        'voicechat:joined_group', 'voicechat:update_state', 'voicechat:player_states'}
-
+                        'voicechat:joined_group', 'voicechat:update_state',
+                        'voicechat:player_states'}
 
 class VoiceConnection(DatagramProtocol):
     host: str
@@ -45,14 +46,13 @@ class VoiceConnection(DatagramProtocol):
     player: uuid.UUID
     secret: uuid.UUID
 
-    decoder: VoiceChatAudioDecoder
-
     on_connected: Callable
     on_voice_data: Callable[[bytes], None]
 
     mic_sequence: int
 
-    def __init__(self, host: str, port: int, player_id: uuid.UUID, secret: uuid.UUID, on_connected: Callable,
+    def __init__(self, host: str, port: int, player_id: uuid.UUID, secret: uuid.UUID,
+                 on_connected: Callable,
                  on_voice_data: Callable[[bytes], None]):
         self.host = host
         self.port = port
@@ -61,9 +61,6 @@ class VoiceConnection(DatagramProtocol):
         self.on_connected = on_connected
         self.on_voice_data = on_voice_data
 
-        self.decoder = VoiceChatAudioDecoder()
-        self.encoder = VoiceChatAudioEncoder(application=APPLICATION_VOIP)
-
         self.mic_sequence = 0
 
     def startProtocol(self):
@@ -71,12 +68,11 @@ class VoiceConnection(DatagramProtocol):
 
     def send_voice(self, data: bytes):
         """
-        Sends PCM-encoded
-        :param data:
+        Sends opus-encoded audio data over the voice connection
+        :param data: opus-encoded audio data
         :return:
         """
-        encoded_data = self.encoder.encode(data)
-        pkt = MicPacket(encoded_data, False, self.mic_sequence)
+        pkt = MicPacket(data, False, self.mic_sequence)
         self.mic_sequence += 1
 
         self._send_packet(pkt)
@@ -95,10 +91,7 @@ class VoiceConnection(DatagramProtocol):
             self.on_connected()
         if packet_type == GroupSoundPacket.ID:
             pkt = GroupSoundPacket.from_buf(payload)
-            # TODO: use sequence info to re-order packets before sending them through to discord
-            # TODO: for now, simply send them all to discord in whatever order they were received
-            pcm_data = self.decoder.decode(pkt.data)
-            self.on_voice_data(pcm_data)
+            self.on_voice_data(pkt.data)
         if packet_type == KeepAlivePacket.ID:
             # Respond with keepalive
             self._send_packet(KeepAlivePacket())
@@ -116,7 +109,6 @@ class VoiceConnection(DatagramProtocol):
     def _send_packet(self, packet: EncodableVoicePacket):
         buf = encode_client_sent_voice_packet(packet.ID, self.player, packet.to_buf(), self.secret)
         self.transport.write(buf)
-
 
 class MinecraftClient(SpawningClientProtocol):
     server_host: str
@@ -187,7 +179,8 @@ class MinecraftClient(SpawningClientProtocol):
 
     def _create_new_voice_connection(self, port: int, player: uuid.UUID, secret: uuid.UUID):
         # Create new voice connection & start listening
-        self.voice = VoiceConnection(self.server_host, port, player, secret, self.on_voice_connected,
+        self.voice = VoiceConnection(self.server_host, port, player, secret,
+                                     self.on_voice_connected,
                                      self.on_voice_data)
         self.voice_listener = reactor.listenUDP(0, self.voice)
 
@@ -208,7 +201,6 @@ class MinecraftClient(SpawningClientProtocol):
 
     def _send_pm_message(self, packet: EncodablePacket):
         self.send_packet("plugin_message", Buffer.pack_string(packet.CHANNEL), packet.to_buf())
-
 
 class MinecraftClientFactory(ClientFactory):
     protocol = MinecraftClient
@@ -231,6 +223,11 @@ class MinecraftClientFactory(ClientFactory):
             self.client.send_voice_data(data)
 
 
+SAMPLE_RATE = 48000  # 48kHz
+FRAME_LENGTH = 20  # 20 ms
+DISCORD_CHANNELS = 2
+MINECRAFT_CHANNELS = 1
+
 def main(argv):
     import argparse
     parser = argparse.ArgumentParser()
@@ -247,22 +244,59 @@ def main(argv):
     minecraft = MinecraftClientFactory(args.host)
     minecraft.connect(args.host, args.port)
 
-    setup_commands(discord_bot, minecraft.send_voice_data)
+    def on_processed_audio(data: bytes):
+        reactor.callFromThread(minecraft.send_voice_data, data)
+
+    mc_recv_voice_proc = AudioProcessThread(
+        on_processed_audio,
+        SAMPLE_RATE,
+        FRAME_LENGTH,
+        DISCORD_CHANNELS,
+        MINECRAFT_CHANNELS
+    )
+
+    mc_recv_voice_proc.start()
+
+    def on_discord_voice_data(data: bytes):
+        # # Workaround bug where pycord seems to be buffering
+        # # frames of emptiness and forwarding those to us next time someone
+        # # speaks.
+        # if len(data) > 3840:
+        #     return
+
+        mc_recv_voice_proc.enqueue(data)
+
+    setup_commands(discord_bot, on_discord_voice_data)
 
     def on_mc_voice_data(data: bytes):
-        if len(discord_bot.voice_clients) > 0:
-            discord_voice_client: VoiceClient = discord_bot.voice_clients[0]
-            from discord import opus
-            discord_voice_client.encoder = opus.Encoder()
-            discord_voice_client.send_audio_packet(data, encode=True)
+        ...
+        # TODO: start thread & stuff
+        # if len(discord_bot.voice_clients) > 0:
+        #     discord_voice_client: VoiceClient = discord_bot.voice_clients[0]
+        #     from discord import opus
+        #     discord_voice_client.encoder = opus.Encoder()
+        #     discord_voice_client.send_audio_packet(data, encode=True)
 
     minecraft.on_mc_voice_data = on_mc_voice_data
 
     # Start discord bot
     loop.create_task(discord_bot.start(bot_token))
 
-    reactor.run()
+    async def on_shutdown():
+        await discord_bot.close()
 
+    def on_shutdown_deferred():
+        try:
+            return Deferred.fromCoroutine(on_shutdown())
+        # Somehow this is triggering an issue in either aiohttp or twisted
+        # builtins.RuntimeError: await wasn't used with future
+        except RuntimeError:
+            pass
+
+    reactor.addSystemEventTrigger('before', 'shutdown', lambda: on_shutdown_deferred)
+
+    reactor.run()
+    mc_recv_voice_proc.stop()
 
 if __name__ == "__main__":
     import sys
