@@ -4,6 +4,7 @@ import uuid
 from typing import Callable, Optional
 
 import discord
+from discord import VoiceClient
 from twisted.internet import asyncioreactor
 # Create event loop
 from twisted.internet.defer import Deferred
@@ -244,11 +245,16 @@ def main(argv):
     minecraft = MinecraftClientFactory(args.host)
     minecraft.connect(args.host, args.port)
 
-    def on_processed_audio(data: bytes):
+    def on_processed_discord_audio(data: bytes):
         reactor.callFromThread(minecraft.send_voice_data, data)
 
+    def on_processed_minecraft_audio(data: bytes):
+        if len(discord_bot.voice_clients) >= 1:
+            discord_voice_client: VoiceClient = discord_bot.voice_clients[0]
+            discord_voice_client.send_audio_packet(data, encode=False)
+
     mc_recv_voice_proc = AudioProcessThread(
-        on_processed_audio,
+        on_processed_discord_audio,
         SAMPLE_RATE,
         FRAME_LENGTH,
         DISCORD_CHANNELS,
@@ -256,6 +262,17 @@ def main(argv):
     )
 
     mc_recv_voice_proc.start()
+
+    discord_recv_voice_proc = AudioProcessThread(
+        on_processed_minecraft_audio,
+        SAMPLE_RATE,
+        FRAME_LENGTH,
+        MINECRAFT_CHANNELS,
+        DISCORD_CHANNELS,
+        decode=True,
+    )
+
+    discord_recv_voice_proc.start()
 
     def on_discord_voice_data(data: bytes):
         # # Workaround bug where pycord seems to be buffering
@@ -269,13 +286,7 @@ def main(argv):
     setup_commands(discord_bot, on_discord_voice_data)
 
     def on_mc_voice_data(data: bytes):
-        ...
-        # TODO: start thread & stuff
-        # if len(discord_bot.voice_clients) > 0:
-        #     discord_voice_client: VoiceClient = discord_bot.voice_clients[0]
-        #     from discord import opus
-        #     discord_voice_client.encoder = opus.Encoder()
-        #     discord_voice_client.send_audio_packet(data, encode=True)
+        discord_recv_voice_proc.enqueue(data)
 
     minecraft.on_mc_voice_data = on_mc_voice_data
 
