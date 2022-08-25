@@ -294,21 +294,19 @@ def main(argv):
     # Start discord bot
     loop.create_task(discord_bot.start(bot_token))
 
-    async def on_shutdown():
-        await discord_bot.close()
-
-    def on_shutdown_deferred():
-        try:
-            return Deferred.fromCoroutine(on_shutdown())
-        # Somehow this is triggering an issue in either aiohttp or twisted
-        # builtins.RuntimeError: await wasn't used with future
-        except RuntimeError:
-            pass
-
-    reactor.addSystemEventTrigger('before', 'shutdown', lambda: on_shutdown_deferred)
-
+    # Run Minecraft client until SIGTERM
     reactor.run()
+
+    print('Shutting down audio process threads')
+
+    # Shutdown audio process threads
+    discord_recv_voice_proc.stop()
     mc_recv_voice_proc.stop()
+
+    print('Stopping discord bot')
+
+    # Stop discord bot
+    loop.run_until_complete(discord_bot.close())
 
 if __name__ == "__main__":
     import sys
