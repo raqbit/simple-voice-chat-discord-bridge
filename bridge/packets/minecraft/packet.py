@@ -1,6 +1,6 @@
 import abc
 
-from packets.encodable import Encodable, Decodable
+from bridge.packets.encodable import Encodable, Decodable
 
 
 class ChannelPacket(abc.ABC):

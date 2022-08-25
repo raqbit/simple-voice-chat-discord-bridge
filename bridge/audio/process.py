@@ -4,7 +4,7 @@ import threading
 from functools import cached_property
 from typing import Callable
 
-from audio.opus import OpusDecoder, OpusEncoder, EncodingApplication
+from bridge.audio.opus import OpusDecoder, OpusEncoder, EncodingApplication
 
 
 class AudioProcessThread(threading.Thread):

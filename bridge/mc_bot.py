@@ -8,11 +8,11 @@ from twisted.internet import reactor
 from twisted.internet.interfaces import IListeningPort, IAddress
 from twisted.internet.tcp import Connector
 
-from packets import voice
-from packets.minecraft import RegisterPacket, BrandPacket, SecretPacket, CreateGroupPacket, RequestSecretPacket, \
+from .packets import voice
+from .packets.minecraft import RegisterPacket, BrandPacket, SecretPacket, CreateGroupPacket, RequestSecretPacket, \
     UpdateStatePacket, EncodablePacket
-from util import Buffer
-from voice_client import VoiceConnection
+from .util import Buffer
+from .voice_client import VoiceConnection
 
 used_plugin_channels = {'voicechat:player_state', 'voicechat:secret', 'voicechat:leave_group',
                         'voicechat:create_group', 'voicechat:request_secret', 'voicechat:set_group',
@@ -83,7 +83,7 @@ class MinecraftClient(SpawningClientProtocol):
     def _reconnect_voice(self, port: int, player: uuid.UUID, secret: uuid.UUID):
         # Disconnect old listener if there was one
         if self.voice_listener is not None:
-            self.voice_listener.stopListening()\
+            self.voice_listener.stopListening() \
                 .addCallback(lambda: self._create_new_voice_connection(port, player, secret))
         else:
             # Directly create new one if not

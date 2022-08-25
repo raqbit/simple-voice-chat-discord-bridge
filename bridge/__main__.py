@@ -4,25 +4,13 @@ import os
 
 import discord
 from discord import VoiceClient
-from twisted.internet import asyncioreactor
-
-import audio
-from audio.process import AudioProcessThread
-
-loop = asyncio.new_event_loop()
-asyncio.set_event_loop(loop)
-
-# Install asyncio reactor to play nice with pycord
-# NOTE: THIS NEEDS TO BE BEFORE THE mc_bot IMPORT
-asyncioreactor.install(loop)
-
-from mc_bot import MinecraftClientFactory
-
 from twisted.internet import reactor
 
-from discord_bot import setup_commands
+from . import audio
+from .audio.process import AudioProcessThread
+from .discord_bot import setup_commands
+from .mc_bot import MinecraftClientFactory
 
-logging.basicConfig()
 
 class DiscordMinecraftBridge():
 
@@ -30,6 +18,8 @@ class DiscordMinecraftBridge():
         self.mc_host = mc_host
         self.mc_port = mc_port
         self.discord_bot_token = discord_bot_token
+
+        self.loop = asyncio.get_event_loop_policy().get_event_loop()
 
         self.discord = discord.Bot()
         setup_commands(self.discord, self._on_discord_audio)
@@ -93,7 +83,7 @@ class DiscordMinecraftBridge():
     def _connect(self):
         self.minecraft.connect(self.mc_host, self.mc_port)
 
-        loop.create_task(self.discord.start(self.discord_bot_token))
+        self.loop.create_task(self.discord.start(self.discord_bot_token))
 
     def _shutdown(self):
         self.logger.info('Shutting down audio process threads')
@@ -105,7 +95,8 @@ class DiscordMinecraftBridge():
         self.logger.info('Stopping discord bot')
 
         # Stop discord bot
-        loop.run_until_complete(self.discord.close())
+        self.loop.run_until_complete(self.discord.close())
+
 
 def main(argv):
     import argparse
@@ -113,6 +104,8 @@ def main(argv):
     parser.add_argument("host")
     parser.add_argument("-p", "--port", default=25565, type=int)
     args = parser.parse_args(argv)
+
+    logging.basicConfig()
 
     bot_token = os.getenv("BOT_TOKEN")
 

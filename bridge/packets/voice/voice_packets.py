@@ -2,8 +2,8 @@ import uuid
 from dataclasses import dataclass
 from typing import NamedTuple
 
-from packets.voice.packet import DecodableVoicePacket, EncodableVoicePacket
-from util import Buffer
+from bridge.packets.voice.packet import DecodableVoicePacket, EncodableVoicePacket
+from bridge.util import Buffer
 
 
 @dataclass

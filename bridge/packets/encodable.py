@@ -1,6 +1,6 @@
 import abc
 
-from util import Buffer
+from bridge.util import Buffer
 
 
 class Decodable(abc.ABC):

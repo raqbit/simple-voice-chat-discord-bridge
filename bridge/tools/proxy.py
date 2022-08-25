@@ -5,14 +5,14 @@ from quarry.net.proxy import DownstreamFactory, Bridge
 from transmitm import Tap, UDPProxy
 from twisted.internet import reactor
 
-from audio import OpusDecoder
-from packets.minecraft import RegisterPacket, BrandPacket, RequestSecretPacket, SecretPacket, PlayerStatePacket, \
+from bridge.audio import OpusDecoder
+from bridge.packets.minecraft import RegisterPacket, BrandPacket, RequestSecretPacket, SecretPacket, PlayerStatePacket, \
     PlayerStatesPacket, UpdateStatePacket, JoinedGroupPacket, CreateGroupPacket, JoinGroupPacket, LeaveGroupPacket, \
     EncodablePacket, PlayerState
-from packets.voice import MicPacket, KeepAlivePacket, PingPacket, PlayerSoundPacket, GroupSoundPacket, \
+from bridge.packets.voice import MicPacket, KeepAlivePacket, PingPacket, PlayerSoundPacket, GroupSoundPacket, \
     LocationSoundPacket, AuthenticatePacket, AuthenticateAckPacket
-from packets.voice.message import decode_voice_packet, decode_client_sent_voice_packet
-from util import Buffer
+from bridge.packets.voice.message import decode_voice_packet, decode_client_sent_voice_packet
+from bridge.util import Buffer
 
 
 class VoiceInterceptor(Tap):
