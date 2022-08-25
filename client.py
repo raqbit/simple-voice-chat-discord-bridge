@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import os
 import uuid
 from typing import Callable, Optional
@@ -6,8 +7,7 @@ from typing import Callable, Optional
 import discord
 from discord import VoiceClient
 from twisted.internet import asyncioreactor
-# Create event loop
-from twisted.internet.defer import Deferred
+from twisted.internet.tcp import Connector
 
 from audio.process import AudioProcessThread
 
@@ -32,6 +32,8 @@ from packets.voice import KeepAlivePacket, EncodableVoicePacket, PingPacket, Aut
     MicPacket, GroupSoundPacket
 from packets.voice.message import decode_voice_packet, encode_client_sent_voice_packet
 from util import Buffer
+
+logging.basicConfig()
 
 compat_version = 14
 
@@ -133,7 +135,6 @@ class MinecraftClient(SpawningClientProtocol):
 
     def player_joined(self):
         super().player_joined()
-        print("Joined the game")
 
     def packet_update_health(self, buf: Buffer):
         health = buf.unpack("f")
@@ -143,6 +144,7 @@ class MinecraftClient(SpawningClientProtocol):
 
         # Respawn if dead
         if health == 0:
+            self.logger.info("Player died")
             self._respawn()
 
     def packet_plugin_message(self, buf: Buffer):
@@ -162,8 +164,10 @@ class MinecraftClient(SpawningClientProtocol):
         buf.discard()
 
     def on_voice_connected(self):
+        self.logger.info("Connected to voice chat")
         self._vc_set_connected(True)
         self._vc_create_group("Discord Bridge")
+        self.logger.info("Created voice chat group")
 
     def on_voice_data(self, data: bytes):
         factory: MinecraftClientFactory = self.factory
@@ -172,8 +176,8 @@ class MinecraftClient(SpawningClientProtocol):
     def _reconnect_voice(self, port: int, player: uuid.UUID, secret: uuid.UUID):
         # Disconnect old listener if there was one
         if self.voice_listener is not None:
-            self.voice_listener.stopListening().addCallback(
-                lambda: self._create_new_voice_connection(port, player, secret))
+            self.voice_listener.stopListening()\
+                .addCallback(lambda: self._create_new_voice_connection(port, player, secret))
         else:
             # Directly create new one if not
             self._create_new_voice_connection(port, player, secret)
@@ -199,6 +203,7 @@ class MinecraftClient(SpawningClientProtocol):
 
     def _respawn(self):
         self.send_packet("client_status", Buffer.pack_varint(0))
+        self.logger.info("Respawned")
 
     def _send_pm_message(self, packet: EncodablePacket):
         self.send_packet("plugin_message", Buffer.pack_string(packet.CHANNEL), packet.to_buf())
@@ -215,6 +220,25 @@ class MinecraftClientFactory(ClientFactory):
         super().__init__(auth.OfflineProfile("Raqbot"))
         self.client = None
         self.server_host = host
+        self.logger = logging.getLogger("%s{%s}" % (
+            self.__class__.__name__,
+            self.server_host))
+        self.logger.setLevel(self.log_level)
+
+    def startedConnecting(self, connector):
+        self.logger.info("Started connecting")
+        super().startedConnecting(connector)
+
+    def clientConnectionFailed(self, connector: Connector, reason):
+        super().clientConnectionFailed(connector, reason)
+        self.logger.warning(f"Connection failed")
+        connector.connect()
+
+    def clientConnectionLost(self, connector: Connector, reason):
+        super().clientConnectionLost(connector, reason)
+        self.logger.warning(f"Connection lost")
+        # TODO: backoff / do not retry if banned or something
+        connector.connect()
 
     def buildProtocol(self, addr):
         return self.protocol(self, addr, self.server_host)
