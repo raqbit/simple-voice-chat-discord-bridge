@@ -1,6 +1,7 @@
 import queue
 import struct
 import threading
+from functools import cached_property
 from typing import Any, Optional, Callable
 
 import opuslib.api.ctl
@@ -84,6 +85,9 @@ class ByteFifo:
         return len(self._buf)
 
 class AudioProcessThread(threading.Thread):
+    _sample_rate: int
+    _frame_length: int
+
     _decode_queue: queue.Queue
     _encode_queue: ByteFifo
 
@@ -96,7 +100,6 @@ class AudioProcessThread(threading.Thread):
     _single_sample_size = struct.calcsize("h")
 
     _source_channels: int
-    _source_frame_size: int
 
     _sink_channels: int
     _sink_callback: Callable[[bytes], None]
@@ -114,44 +117,22 @@ class AudioProcessThread(threading.Thread):
     ):
         super().__init__(name="AudioProcessThread")
 
+        self._sample_rate = sample_rate
+        self._frame_length = frame_length
+
         self._source_channels = source_channels
 
         self._sink_channels = sink_channels
         self._sink_callback = sink_callback
 
-        samples_per_frame = int(sample_rate / 1000 * frame_length)
-
-        print('\t========AudioProcessThread========')
-        print(f'\tSample rate: {sample_rate}Hz\r')
-        print(f'\tFrame length: {frame_length}ms')
-        print(f'\tSamples/frame: {samples_per_frame} samples')
-
-        source_sample_size = self._single_sample_size * source_channels
-        sink_sample_size = self._single_sample_size * sink_channels
-
-        print(f'\tSource channels: {source_channels}')
-        print(f'\tSink channels: {sink_channels}')
-
-        print(f'\tSource sample size: {source_sample_size} bytes')
-        print(f'\tSink sample size: {sink_sample_size} bytes')
-
-        source_frame_size = samples_per_frame * source_sample_size
-        sink_frame_size = samples_per_frame * sink_sample_size
-
-        print(f'\tSource frame size: {source_frame_size}')
-        print(f'\tSink frame size: {sink_frame_size}')
-        print('\t==================================')
-
-        self._source_frame_size = source_frame_size
-
         self._should_decode = decode
         self._can_encode = threading.Condition()
 
         self._decode_queue = queue.Queue()
-        self._decoder = OpusDecoder(sample_rate, samples_per_frame, source_channels)
+        self._decoder = OpusDecoder(sample_rate, self._samples_per_frame, source_channels)
 
         self._encode_queue = ByteFifo()
-        self._encoder = OpusEncoder(sample_rate, samples_per_frame, sink_channels, APPLICATION_VOIP)
+        self._encoder = OpusEncoder(sample_rate, self._samples_per_frame, sink_channels, APPLICATION_VOIP)
 
         self._end_thread = threading.Event()
 
@@ -210,6 +191,42 @@ class AudioProcessThread(threading.Thread):
 
     def _has_enough_to_encode(self):
         return len(self._encode_queue) >= self._source_frame_size
+
+    @cached_property
+    def _samples_per_frame(self):
+        return int(self._sample_rate / 1000 * self._frame_length)
+
+    @cached_property
+    def _source_sample_size(self):
+        return self._single_sample_size * self._source_channels
+
+    @cached_property
+    def _sink_sample_size(self):
+        return self._single_sample_size * self._sink_channels
+
+    @cached_property
+    def _source_frame_size(self):
+        return self._samples_per_frame * self._source_sample_size
+
+    @cached_property
+    def _sink_frame_size(self):
+        return self._samples_per_frame * self._sink_sample_size
+
+    def print_info(self):
+        print('\t========AudioProcessThread========')
+        print(f'\tSample rate: {self._sample_rate}Hz\r')
+        print(f'\tFrame length: {self._frame_length}ms')
+        print(f'\tSamples/frame: {self._samples_per_frame} samples')
+
+        print(f'\tSource channels: {self._source_channels}')
+        print(f'\tSink channels: {self._sink_channels}')
+
+        print(f'\tSource sample size: {self._source_sample_size} bytes')
+        print(f'\tSink sample size: {self._sink_sample_size} bytes')
+
+        print(f'\tSource frame size: {self._source_frame_size}')
+        print(f'\tSink frame size: {self._sink_frame_size}')
+        print('\t==================================')
 
     def stop(self):
         self._end_thread.set()
