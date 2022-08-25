@@ -60,39 +60,12 @@ class OpusEncoder:
     def reset(self):
         self.encoder.reset_state()
 
-# https://stackoverflow.com/a/57748513
-class ByteFifo:
-    def __init__(self):
-        self._buf = bytearray()
-
-    def put(self, data):
-        self._buf.extend(data)
-
-    def get(self, size):
-        data = self._buf[:size]
-        # The fast delete syntax
-        self._buf[:size] = b''
-        return data
-
-    def peek(self, size):
-        return self._buf[:size]
-
-    def getvalue(self):
-        # peek with no copy
-        return self._buf
-
-    def __len__(self):
-        return len(self._buf)
-
 class AudioProcessThread(threading.Thread):
     _sample_rate: int
     _frame_length: int
 
-    _decode_queue: queue.Queue
-    _encode_queue: ByteFifo
-
-    should_decode: bool
-    _can_encode: threading.Condition
+    _input_queue: queue.Queue
+    _should_decode_input: bool
 
     _decoder: OpusDecoder
     _encoder: OpusEncoder
@@ -125,48 +98,28 @@ class AudioProcessThread(threading.Thread):
         self._sink_channels = sink_channels
         self._sink_callback = sink_callback
 
-        self._should_decode = decode
-        self._can_encode = threading.Condition()
+        self._should_decode_input = decode
 
-        self._decode_queue = queue.Queue()
+        self._input_queue = queue.Queue()
         self._decoder = OpusDecoder(sample_rate, self._samples_per_frame, source_channels)
 
-        self._encode_queue = ByteFifo()
         self._encoder = OpusEncoder(sample_rate, self._samples_per_frame, sink_channels, APPLICATION_VOIP)
 
         self._end_thread = threading.Event()
 
     def enqueue(self, data: bytes):
-        if self._should_decode:
-            self._decode_queue.put(data)
-        else:
-            with self._can_encode:
-                self._encode_queue.put(data)
-                if self._has_enough_to_encode():
-                    self._can_encode.notify()
+        self._input_queue.put(data)
 
     def run(self) -> None:
         while not self._end_thread.is_set():
-            if self._should_decode:
-                # If we're decoding, decode data
-                try:
-                    opus_data = self._decode_queue.get(timeout=0.5)
-                except queue.Empty:
-                    continue
-
-                decoded = self._decoder.decode(opus_data)
-                self._encode_queue.put(decoded)
-            else:
-                # If we're not decoding, wait for us to have enough to encode
-                with self._can_encode:
-                    if not self._can_encode.wait_for(self._has_enough_to_encode, timeout=0.5):
-                        continue
-
-            if not self._has_enough_to_encode():
+            try:
+                to_encode = self._input_queue.get(timeout=0.5)
+            except queue.Empty:
                 continue
 
-            # Get a complete source frame
-            to_encode = self._encode_queue.get(int(self._source_frame_size))
+            # Decode opus audio if we need to
+            if self._should_decode_input:
+                to_encode = self._decoder.decode(to_encode)
 
             # Upmix or downmix decoded audio before encoding frame
             if self._source_channels != self._sink_channels:
@@ -188,9 +141,6 @@ class AudioProcessThread(threading.Thread):
             i += (self._single_sample_size * self._source_channels)
 
         return output
-
-    def _has_enough_to_encode(self):
-        return len(self._encode_queue) >= self._source_frame_size
 
     @cached_property
     def _samples_per_frame(self):
