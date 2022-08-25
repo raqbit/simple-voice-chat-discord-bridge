@@ -9,7 +9,7 @@ from twisted.internet import asyncioreactor
 # Create event loop
 from twisted.internet.defer import Deferred
 
-from audio import AudioProcessThread
+from audio.process import AudioProcessThread
 
 loop = asyncio.new_event_loop()
 asyncio.set_event_loop(loop)
@@ -250,8 +250,9 @@ def main(argv):
 
     def on_processed_minecraft_audio(data: bytes):
         if len(discord_bot.voice_clients) >= 1:
-            discord_voice_client: VoiceClient = discord_bot.voice_clients[0]
-            discord_voice_client.send_audio_packet(data, encode=False)
+            discord_voice_client = discord_bot.voice_clients[0]
+            if isinstance(discord_voice_client, VoiceClient) and discord_voice_client.is_connected():
+                discord_voice_client.send_audio_packet(data, encode=False)
 
     mc_recv_voice_proc = AudioProcessThread(
         on_processed_discord_audio,

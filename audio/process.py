@@ -2,63 +2,10 @@ import queue
 import struct
 import threading
 from functools import cached_property
-from typing import Any, Optional, Callable
+from typing import Callable
 
-import opuslib.api.ctl
-import opuslib.api.decoder
-from opuslib import APPLICATION_VOIP
+from audio.opus import OpusDecoder, OpusEncoder, EncodingApplication
 
-class OpusDecoder:
-    decoder_state: Any
-
-    frame_size: int
-    channels: int
-
-    def __init__(self, sample_rate: int, frame_size: int, channels):
-        self.frame_size = frame_size
-        self.channels = channels
-        self.decoder_state = opuslib.api.decoder.create_state(sample_rate, channels)
-
-    def __del__(self) -> None:
-        if hasattr(self, 'decoder_state'):
-            # Destroying state only if __init__ completed successfully
-            opuslib.api.decoder.destroy(self.decoder_state)
-
-    def decode(self, data: bytes) -> bytes:
-        # Java decoder feeds libopus null so that it can handle packet loss concealment (PLC)
-        # https://github.com/henkelmax/simple-voice-chat/blob/cef95a1e8323e194f5f51ea18da248c8fab9c8dc/common/src/main/java/de/maxhenkel/voicechat/plugins/impl/opus/JavaOpusDecoderImpl.java#L45
-        if data is None or len(data) == 0:
-            return self._decode(None, 0)
-        return self._decode(data, len(data))
-
-    def _decode(self, opus_data: Optional[bytes], data_len: int) -> bytes:
-        return opuslib.api.decoder.decode(
-            self.decoder_state,
-            opus_data,
-            data_len,
-            self.frame_size,
-            False,
-            channels=self.channels
-        )
-
-    def reset(self):
-        opuslib.api.decoder.decoder_ctl(
-            self.decoder_state,
-            opuslib.api.ctl.reset_state
-        )
-
-class OpusEncoder:
-    frame_size: int
-
-    def __init__(self, sample_rate: int, frame_size: int, channels: int, application: str):
-        self.frame_size = frame_size
-        self.encoder = opuslib.Encoder(sample_rate, channels, application)
-
-    def encode(self, data: bytes) -> bytes:
-        return self.encoder.encode(data, self.frame_size)
-
-    def reset(self):
-        self.encoder.reset_state()
 
 class AudioProcessThread(threading.Thread):
     _sample_rate: int
@@ -103,7 +50,7 @@ class AudioProcessThread(threading.Thread):
         self._input_queue = queue.Queue()
         self._decoder = OpusDecoder(sample_rate, self._samples_per_frame, source_channels)
 
-        self._encoder = OpusEncoder(sample_rate, self._samples_per_frame, sink_channels, APPLICATION_VOIP)
+        self._encoder = OpusEncoder(sample_rate, self._samples_per_frame, sink_channels, EncodingApplication.VOICE)
 
         self._end_thread = threading.Event()
 
@@ -113,7 +60,7 @@ class AudioProcessThread(threading.Thread):
     def run(self) -> None:
         while not self._end_thread.is_set():
             try:
-                to_encode = self._input_queue.get(timeout=0.5)
+                to_encode = self._input_queue.get(timeout=0.1)
             except queue.Empty:
                 continue
 
