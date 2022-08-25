@@ -6,6 +6,7 @@ import discord
 from discord import VoiceClient
 from twisted.internet import asyncioreactor
 
+import audio
 from audio.process import AudioProcessThread
 
 loop = asyncio.new_event_loop()
@@ -23,11 +24,88 @@ from discord_bot import setup_commands
 
 logging.basicConfig()
 
-SAMPLE_RATE = 48000  # 48kHz
-FRAME_LENGTH = 20  # 20 ms
-DISCORD_CHANNELS = 2
-MINECRAFT_CHANNELS = 1
+class DiscordMinecraftBridge():
 
+    def __init__(self, mc_host: str, mc_port: int, discord_bot_token: str):
+        self.mc_host = mc_host
+        self.mc_port = mc_port
+        self.discord_bot_token = discord_bot_token
+
+        self.discord = discord.Bot()
+        setup_commands(self.discord, self._on_discord_audio)
+
+        self.minecraft = MinecraftClientFactory(mc_host, self._on_minecraft_audio)
+
+        self.discord_process = AudioProcessThread(
+            self._on_processed_discord_audio,
+            audio.SAMPLE_RATE,
+            audio.FRAME_LENGTH,
+            audio.DISCORD_CHANNELS,
+            audio.MINECRAFT_CHANNELS
+        )
+
+        self.minecraft_process = AudioProcessThread(
+            self._on_processed_minecraft_audio,
+            audio.SAMPLE_RATE,
+            audio.FRAME_LENGTH,
+            audio.MINECRAFT_CHANNELS,
+            audio.DISCORD_CHANNELS,
+            decode=True
+        )
+
+        self.logger = logging.getLogger(f"{self.__class__.__name__}")
+        self.logger.setLevel(logging.INFO)
+
+    def run(self):
+        # Setup connection to Minecraft & start discord
+        self._connect()
+
+        # Start audio processing threads
+        self.minecraft_process.start()
+        self.discord_process.start()
+
+        # Run Twisted reactor until shutdown
+        reactor.run()
+
+        # Shutdown
+        self._shutdown()
+
+    def _on_discord_audio(self, raw_frame: bytes):
+        # # Workaround bug where pycord seems to be buffering
+        # # frames of emptiness and forwarding those to us next time someone
+        # # speaks.
+        # if len(data) > 3840:
+        #     return
+        self.discord_process.enqueue(raw_frame)
+
+    def _on_minecraft_audio(self, encoded_frame: bytes):
+        self.minecraft_process.enqueue(encoded_frame)
+
+    def _on_processed_discord_audio(self, encoded_frame: bytes):
+        reactor.callFromThread(self.minecraft.send_voice_data, encoded_frame)
+
+    def _on_processed_minecraft_audio(self, encoded_frame: bytes):
+        if len(self.discord.voice_clients) >= 1:
+            discord_voice_client = self.discord.voice_clients[0]
+            if isinstance(discord_voice_client, VoiceClient) and discord_voice_client.is_connected():
+                discord_voice_client.send_audio_packet(encoded_frame, encode=False)
+
+    def _connect(self):
+        self.minecraft.connect(self.mc_host, self.mc_port)
+
+        loop.create_task(self.discord.start(self.discord_bot_token))
+
+    def _shutdown(self):
+        self.logger.info('Shutting down audio process threads')
+
+        # Shutdown audio process threads
+        self.discord_process.stop()
+        self.minecraft_process.stop()
+
+        self.logger.info('Stopping discord bot')
+
+        # Stop discord bot
+        loop.run_until_complete(self.discord.close())
 
 def main(argv):
     import argparse
@@ -41,72 +119,9 @@ def main(argv):
     if bot_token is None:
         raise Exception("no discord bot token provided")
 
-    discord_bot = discord.Bot()
-    minecraft = MinecraftClientFactory(args.host)
-    minecraft.connect(args.host, args.port)
+    bridge = DiscordMinecraftBridge(args.host, args.port, bot_token)
 
-    def on_processed_discord_audio(data: bytes):
-        reactor.callFromThread(minecraft.send_voice_data, data)
-
-    def on_processed_minecraft_audio(data: bytes):
-        if len(discord_bot.voice_clients) >= 1:
-            discord_voice_client = discord_bot.voice_clients[0]
-            if isinstance(discord_voice_client, VoiceClient) and discord_voice_client.is_connected():
-                discord_voice_client.send_audio_packet(data, encode=False)
-
-    mc_recv_voice_proc = AudioProcessThread(
-        on_processed_discord_audio,
-        SAMPLE_RATE,
-        FRAME_LENGTH,
-        DISCORD_CHANNELS,
-        MINECRAFT_CHANNELS
-    )
-
-    mc_recv_voice_proc.start()
-
-    discord_recv_voice_proc = AudioProcessThread(
-        on_processed_minecraft_audio,
-        SAMPLE_RATE,
-        FRAME_LENGTH,
-        MINECRAFT_CHANNELS,
-        DISCORD_CHANNELS,
-        decode=True,
-    )
-
-    discord_recv_voice_proc.start()
-
-    def on_discord_voice_data(data: bytes):
-        # # Workaround bug where pycord seems to be buffering
-        # # frames of emptiness and forwarding those to us next time someone
-        # # speaks.
-        # if len(data) > 3840:
-        #     return
-
-        mc_recv_voice_proc.enqueue(data)
-
-    setup_commands(discord_bot, on_discord_voice_data)
-
-    def on_mc_voice_data(data: bytes):
-        discord_recv_voice_proc.enqueue(data)
-
-    minecraft.on_mc_voice_data = on_mc_voice_data
-
-    # Start discord bot
-    loop.create_task(discord_bot.start(bot_token))
-
-    # Run Minecraft client until SIGTERM
-    reactor.run()
-
-    print('Shutting down audio process threads')
-
-    # Shutdown audio process threads
-    discord_recv_voice_proc.stop()
-    mc_recv_voice_proc.stop()
-
-    print('Stopping discord bot')
-
-    # Stop discord bot
-    loop.run_until_complete(discord_bot.close())
+    bridge.run()
 
 
 if __name__ == "__main__":

@@ -124,10 +124,13 @@ class MinecraftClientFactory(ClientFactory):
 
     client: Optional[MinecraftClient]
 
-    def __init__(self, host):
+    def __init__(self, host, on_audio: Optional[Callable[[bytes], None]]):
         super().__init__(auth.OfflineProfile("Raqbot"))
         self.client = None
         self.server_host = host
+
+        self.on_mc_voice_data = on_audio
+
         self.logger = logging.getLogger("%s{%s}" % (
             self.__class__.__name__,
             self.server_host))
