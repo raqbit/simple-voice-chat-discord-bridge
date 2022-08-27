@@ -5,7 +5,7 @@ from quarry.net.proxy import DownstreamFactory, Bridge
 from transmitm import Tap, UDPProxy
 from twisted.internet import reactor
 
-from bridge.audio import OpusDecoder
+from bridge.audio.opus import OpusDecoder
 from bridge.packets.minecraft import RegisterPacket, BrandPacket, RequestSecretPacket, SecretPacket, PlayerStatePacket, \
     PlayerStatesPacket, UpdateStatePacket, JoinedGroupPacket, CreateGroupPacket, JoinGroupPacket, LeaveGroupPacket, \
     EncodablePacket, PlayerState

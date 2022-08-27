@@ -3,3 +3,5 @@ venv/
 
 # Minecraft server for testing
 server/
+# Minecraft auth data
+.auth.json
