@@ -31,16 +31,16 @@ def _load_auth_details() -> AuthDetails:
         json_data = json.load(f)
         return AuthDetails(json_data)
 
-def refresh_auth(client_id: str, redirect_url: str) -> str:
+def refresh_auth(client_id: str) -> (str, str, str):
     auth_details = _load_auth_details()
 
-    response = microsoft_account.complete_refresh(client_id, None, redirect_url, auth_details.refresh_token)
+    response = microsoft_account.complete_refresh(client_id, None, None, auth_details.refresh_token)
 
     details = AuthDetails(response)
 
     _save_auth_details(details)
 
-    return response['access_token']
+    return (details.id, details.name, response['access_token'])
 
 def do_auth_flow(client_id: str, redirect_url: str, get_url: Callable[[str], str]) -> str:
     login_url, state, code_verifier = microsoft_account.get_secure_login_data(client_id, redirect_url)
@@ -61,6 +61,3 @@ def do_auth_flow(client_id: str, redirect_url: str, get_url: Callable[[str], str
     _save_auth_details(details)
 
     return login_data['access_token']
-
-
-

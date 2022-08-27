@@ -1,20 +1,31 @@
 import asyncio
 import logging
 import os
+from typing import Optional
 
 import discord
 from discord import VoiceClient
+from minecraft_launcher_lib.exceptions import InvalidRefreshToken
 from twisted.internet import reactor
 
+from bridge.minecraft.auth import refresh_auth as refresh_minecraft_auth
+from bridge.minecraft.client import MinecraftClientFactory
 from . import audio
 from .audio.process import AudioProcessThread
 from .discord_bot import setup_commands
-from .mc_bot import MinecraftClientFactory
 
 
 class DiscordMinecraftBridge():
 
-    def __init__(self, mc_host: str, mc_port: int, discord_bot_token: str):
+    def __init__(
+            self,
+            mc_host: str,
+            mc_port: int,
+            discord_bot_token: str,
+            mc_uuid: Optional[str] = None,
+            mc_name: Optional[str] = None,
+            mc_token: Optional[str] = None
+    ):
         self.mc_host = mc_host
         self.mc_port = mc_port
         self.discord_bot_token = discord_bot_token
@@ -24,7 +35,7 @@ class DiscordMinecraftBridge():
         self.discord = discord.Bot()
         setup_commands(self.discord, self._on_discord_audio)
 
-        self.minecraft = MinecraftClientFactory(mc_host, self._on_minecraft_audio)
+        self.minecraft = MinecraftClientFactory(mc_host, mc_uuid, mc_name, mc_token, self._on_minecraft_audio)
 
         self.discord_process = AudioProcessThread(
             self._on_processed_discord_audio,
@@ -105,14 +116,33 @@ def main(argv):
     parser.add_argument("-p", "--port", default=25565, type=int)
     args = parser.parse_args(argv)
 
+    logger = logging.getLogger(f"main")
+    logger.setLevel(logging.INFO)
+
     logging.basicConfig()
 
-    bot_token = os.getenv("BOT_TOKEN")
+    discord_token = os.getenv("BOT_TOKEN")
 
-    if bot_token is None:
+    if discord_token is None:
         raise Exception("no discord bot token provided")
 
-    bridge = DiscordMinecraftBridge(args.host, args.port, bot_token)
+    client_id = os.getenv("MSA_CLIENT_ID")
+
+    kwargs = {}
+
+    if client_id is not None:
+        logger.info("Client ID set, attempting login into Minecraft account")
+        try:
+            mc_uuid, mc_name, mc_token = refresh_minecraft_auth(client_id)
+        except InvalidRefreshToken:
+            logger.error("Refresh token invalid, please login again")
+            sys.exit(1)
+        logger.info(f"Successfully logged in as {mc_name}")
+        kwargs['mc_uuid'] = mc_uuid
+        kwargs['mc_name'] = mc_name
+        kwargs['mc_token'] = mc_token
+
+    bridge = DiscordMinecraftBridge(args.host, args.port, discord_token, **kwargs)
 
     bridge.run()
 

@@ -4,7 +4,7 @@ import uuid
 from cryptography.hazmat.primitives import padding
 from cryptography.hazmat.primitives.ciphers import modes, algorithms, Cipher
 
-from bridge.util import Buffer
+from bridge.util.encodable import Buffer
 
 
 class InvalidSecretException(Exception):

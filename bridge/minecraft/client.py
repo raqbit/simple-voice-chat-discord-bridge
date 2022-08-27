@@ -4,15 +4,16 @@ from typing import Optional, Callable
 
 from quarry.net import auth
 from quarry.net.client import SpawningClientProtocol, ClientFactory
+from quarry.types.uuid import UUID
 from twisted.internet import reactor
 from twisted.internet.interfaces import IListeningPort, IAddress
 from twisted.internet.tcp import Connector
 
-from .packets import voice
-from .packets.minecraft import RegisterPacket, BrandPacket, SecretPacket, CreateGroupPacket, RequestSecretPacket, \
+from bridge import voice
+from bridge.minecraft.packets import RegisterPacket, BrandPacket, SecretPacket, CreateGroupPacket, RequestSecretPacket, \
     UpdateStatePacket, EncodablePacket
-from .util import Buffer
-from .voice_client import VoiceConnection
+from bridge.util.encodable import Buffer
+from bridge.voice_client import VoiceConnection
 
 used_plugin_channels = {'voicechat:player_state', 'voicechat:secret', 'voicechat:leave_group',
                         'voicechat:create_group', 'voicechat:request_secret', 'voicechat:set_group',
@@ -115,7 +116,6 @@ class MinecraftClient(SpawningClientProtocol):
     def _send_pm_message(self, packet: EncodablePacket):
         self.send_packet("plugin_message", Buffer.pack_string(packet.CHANNEL), packet.to_buf())
 
-
 class MinecraftClientFactory(ClientFactory):
     protocol = MinecraftClient
     server_host: str
@@ -124,8 +124,13 @@ class MinecraftClientFactory(ClientFactory):
 
     client: Optional[MinecraftClient]
 
-    def __init__(self, host, on_audio: Optional[Callable[[bytes], None]]):
-        super().__init__(auth.OfflineProfile("Raqbot"))
+    def __init__(self, host, _uuid: Optional[str], name: str, token: Optional[str], on_audio: Optional[Callable[[bytes], None]]):
+        if _uuid is None or token is None:
+            profile = auth.OfflineProfile("VoiceChatBridge")
+        else:
+            profile = auth.Profile(None, token, name, UUID.from_hex(hex=_uuid))
+
+        super().__init__(profile)
         self.client = None
         self.server_host = host
 
@@ -143,13 +148,13 @@ class MinecraftClientFactory(ClientFactory):
     def clientConnectionFailed(self, connector: Connector, reason):
         super().clientConnectionFailed(connector, reason)
         self.logger.warning(f"Connection failed")
-        connector.connect()
+        # connector.connect()
 
     def clientConnectionLost(self, connector: Connector, reason):
         super().clientConnectionLost(connector, reason)
         self.logger.warning(f"Connection lost")
         # TODO: backoff / do not retry if banned or something
-        connector.connect()
+        # connector.connect()
 
     def buildProtocol(self, addr):
         return self.protocol(self, addr, self.server_host)

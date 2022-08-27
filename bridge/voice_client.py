@@ -4,11 +4,10 @@ from typing import Callable
 from twisted.internet import reactor
 from twisted.internet.protocol import DatagramProtocol
 
-from .packets.voice import MicPacket, AuthenticateAckPacket, GroupSoundPacket, KeepAlivePacket, PingPacket, \
+from .util.encodable import Buffer
+from .voice.packets import MicPacket, AuthenticateAckPacket, GroupSoundPacket, KeepAlivePacket, PingPacket, \
     AuthenticatePacket, EncodableVoicePacket
-from .packets.voice.message import decode_voice_packet, encode_client_sent_voice_packet
-from .util import Buffer
-
+from .voice import decode_voice_packet, encode_client_sent_voice_packet
 
 class VoiceConnection(DatagramProtocol):
     host: str

@@ -1,7 +1,8 @@
 import abc
 
-from bridge.util import Buffer
+import quarry.types.buffer
 
+Buffer = quarry.types.buffer.Buffer1_14
 
 class Decodable(abc.ABC):
     @classmethod

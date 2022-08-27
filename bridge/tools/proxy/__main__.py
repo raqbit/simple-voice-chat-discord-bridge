@@ -6,13 +6,20 @@ from transmitm import Tap, UDPProxy
 from twisted.internet import reactor
 
 from bridge.audio.opus import OpusDecoder
-from bridge.packets.minecraft import RegisterPacket, BrandPacket, RequestSecretPacket, SecretPacket, PlayerStatePacket, \
-    PlayerStatesPacket, UpdateStatePacket, JoinedGroupPacket, CreateGroupPacket, JoinGroupPacket, LeaveGroupPacket, \
+from bridge.minecraft.packets import RegisterPacket, \
+    BrandPacket, RequestSecretPacket, \
+    SecretPacket, PlayerStatePacket, \
+    PlayerStatesPacket, UpdateStatePacket, \
+    JoinedGroupPacket, CreateGroupPacket, \
+    JoinGroupPacket, LeaveGroupPacket, \
     EncodablePacket, PlayerState
-from bridge.packets.voice import MicPacket, KeepAlivePacket, PingPacket, PlayerSoundPacket, GroupSoundPacket, \
-    LocationSoundPacket, AuthenticatePacket, AuthenticateAckPacket
-from bridge.packets.voice.message import decode_voice_packet, decode_client_sent_voice_packet
-from bridge.util import Buffer
+from bridge.util.encodable import Buffer
+from bridge.voice.encoding import decode_voice_packet, decode_client_sent_voice_packet
+from bridge.voice.packets import MicPacket, \
+    KeepAlivePacket, PingPacket, \
+    PlayerSoundPacket, GroupSoundPacket, \
+    LocationSoundPacket, AuthenticatePacket, \
+    AuthenticateAckPacket
 
 
 class VoiceInterceptor(Tap):
@@ -30,7 +37,7 @@ class VoiceInterceptor(Tap):
         self.secrets = {}
         self._peer_to_player = {}
 
-        self.decoder = OpusDecoder(48000, int((48000/1000)*20), 1)
+        self.decoder = OpusDecoder(48000, int((48000 / 1000) * 20), 1)
 
     def handle(self, data, ip_tuple):
         peer, proxy = ip_tuple

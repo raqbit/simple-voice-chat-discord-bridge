@@ -2,9 +2,9 @@ import uuid
 from dataclasses import dataclass
 from typing import Optional, Dict
 
-from bridge.packets import Decodable
-from bridge.packets.minecraft import EncodablePacket, DecodablePacket
-from bridge.util import Buffer
+from bridge.voice.packets import Decodable
+from .packet import EncodablePacket, DecodablePacket
+from bridge.util.encodable import Buffer
 
 NAMESPACE = "voicechat"
 

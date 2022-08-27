@@ -1,7 +1,6 @@
 from dataclasses import dataclass
 
-from bridge.packets.encodable import Decodable
-from bridge.util import Buffer
+from bridge.util.encodable import Buffer, Decodable
 
 NAMESPACE = "minecraft"
 
