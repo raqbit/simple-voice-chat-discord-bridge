@@ -13,7 +13,7 @@ from bridge import voice
 from bridge.minecraft.packets import RegisterPacket, BrandPacket, SecretPacket, CreateGroupPacket, RequestSecretPacket, \
     UpdateStatePacket, EncodablePacket
 from bridge.util.encodable import Buffer
-from bridge.voice_client import VoiceConnection
+from bridge.voice.client import VoiceConnection
 
 used_plugin_channels = {'voicechat:player_state', 'voicechat:secret', 'voicechat:leave_group',
                         'voicechat:create_group', 'voicechat:request_secret', 'voicechat:set_group',
