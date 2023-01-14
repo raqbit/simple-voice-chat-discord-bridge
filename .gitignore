@@ -1,6 +1,3 @@
-__pycache__
-venv/
-
 # Minecraft server for testing
 server/
 # Minecraft auth data
