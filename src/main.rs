@@ -17,6 +17,7 @@ use crate::secret::{
 mod plugin_channels;
 mod respawn;
 mod secret;
+mod shutdown;
 
 #[macro_use]
 mod resource_location;
@@ -39,7 +40,8 @@ async fn main() {
             plugin_channels::Plugin::require_plugins(vec![
                 VOICECHAT_REQUEST_SECRET_CHANNEL,
                 VOICECHAT_SECRET_CHANNEL
-            ])
+            ]),
+            shutdown::Plugin::default()
         ],
         state: State::default(),
         handle,
