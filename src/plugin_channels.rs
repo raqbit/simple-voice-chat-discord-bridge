@@ -17,7 +17,7 @@ pub struct Plugin {
 impl Plugin {
     pub fn require_plugins(plugins: Vec<&'static str>) -> Plugin {
         Plugin {
-            required_plugins: HashSet::from_iter(plugins)
+            required_plugins: HashSet::from_iter(plugins),
         }
     }
 }
@@ -34,10 +34,15 @@ impl azalea::Plugin for Plugin {
 }
 
 impl Plugin {
-    async fn handle_custom_payload_packet(self, bot: Client, packet: ClientboundCustomPayloadPacket) {
+    async fn handle_custom_payload_packet(
+        self,
+        bot: Client,
+        packet: ClientboundCustomPayloadPacket,
+    ) {
         match packet.identifier.to_string().as_str() {
             "minecraft:register" => {
-                let server_channels: HashSet<&str> = packet.data
+                let server_channels: HashSet<&str> = packet
+                    .data
                     .split(|&c| c == 0x00)
                     .filter(|x| !x.is_empty())
                     .map(|d| str::from_utf8(d))
@@ -48,11 +53,16 @@ impl Plugin {
                     error!("Server is missing required plugin channels.");
                     bot.shutdown().await.expect("Could not shutdown properly");
                 } else {
-                    info!("Required plugin channels present: {}", self.required_plugins.into_iter().collect::<Vec<&str>>().join(","))
+                    info!(
+                        "Required plugin channels present: {}",
+                        self.required_plugins
+                            .into_iter()
+                            .collect::<Vec<&str>>()
+                            .join(",")
+                    )
                 }
             }
             _ => {}
         }
     }
 }
-

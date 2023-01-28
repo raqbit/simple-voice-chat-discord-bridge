@@ -5,7 +5,8 @@ use crate::resource_location;
 
 const VOICECHAT_NAMESPACE: &str = "voicechat";
 
-pub const VOICECHAT_REQUEST_SECRET_CHANNEL: &str = resource_location!(VOICECHAT_NAMESPACE, "request_secret");
+pub const VOICECHAT_REQUEST_SECRET_CHANNEL: &str =
+    resource_location!(VOICECHAT_NAMESPACE, "request_secret");
 pub const VOICECHAT_SECRET_CHANNEL: &str = resource_location!(VOICECHAT_NAMESPACE, "secret");
 
 #[derive(Clone, Debug, McBufWritable)]

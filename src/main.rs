@@ -5,15 +5,17 @@ use async_trait::async_trait;
 use azalea::prelude::*;
 use azalea_buf::{McBufReadable, McBufWritable, UnsizedByteArray};
 use azalea_core::ResourceLocation;
-use azalea_protocol::packets::game::{ClientboundGamePacket, ServerboundGamePacket};
 use azalea_protocol::packets::game::serverbound_custom_payload_packet::ServerboundCustomPayloadPacket;
+use azalea_protocol::packets::game::{ClientboundGamePacket, ServerboundGamePacket};
 use const_format::formatcp;
 use log::{error, info};
 
-use crate::secret::{SecretRequest, SecretResponse, VOICECHAT_REQUEST_SECRET_CHANNEL, VOICECHAT_SECRET_CHANNEL};
+use crate::secret::{
+    SecretRequest, SecretResponse, VOICECHAT_REQUEST_SECRET_CHANNEL, VOICECHAT_SECRET_CHANNEL,
+};
 
-mod respawn;
 mod plugin_channels;
+mod respawn;
 mod secret;
 
 #[macro_use]
@@ -42,20 +44,26 @@ async fn main() {
         state: State::default(),
         handle,
     })
-        .await
-        .unwrap_or_else(|e| {
-            println!("Could not start bot: {}", e)
-        })
+    .await
+    .unwrap_or_else(|e| println!("Could not start bot: {}", e))
 }
 
 #[async_trait]
 pub trait ClientPMExt {
-    async fn write_plugin_message<T: McBufWritable + Send>(self, identifier: &str, data: T) -> Result<(), Box<dyn error::Error>>;
+    async fn write_plugin_message<T: McBufWritable + Send>(
+        self,
+        identifier: &str,
+        data: T,
+    ) -> Result<(), Box<dyn error::Error>>;
 }
 
 #[async_trait]
 impl ClientPMExt for Client {
-    async fn write_plugin_message<T: McBufWritable + Send>(self, identifier: &str, data: T) -> Result<(), Box<dyn error::Error>> {
+    async fn write_plugin_message<T: McBufWritable + Send>(
+        self,
+        identifier: &str,
+        data: T,
+    ) -> Result<(), Box<dyn error::Error>> {
         let mut buf = Vec::new();
         data.write_into(&mut buf)?;
 
@@ -65,7 +73,8 @@ impl ClientPMExt for Client {
             identifier,
             data: UnsizedByteArray::from(buf),
         };
-        self.write_packet(ServerboundGamePacket::CustomPayload(packet)).await?;
+        self.write_packet(ServerboundGamePacket::CustomPayload(packet))
+            .await?;
         Ok(())
     }
 }
@@ -90,14 +99,19 @@ async fn handle_packet(client: Client, state: State, pkt: Box<ClientboundGamePac
     if let ClientboundGamePacket::CustomPayload(packet) = *pkt {
         match packet.identifier.to_string().as_str() {
             MINECRAFT_BRAND_CHANNEL => {
-                match client.write_plugin_message(
-                    VOICECHAT_REQUEST_SECRET_CHANNEL,
-                    SecretRequest {
-                        compat_version: VOICECHAT_COMPAT_VERSION
-                    },
-                ).await {
-                    Ok(_) => { info!("Sent secret request") }
-                    Err(e) => error!("Could not send secret request: {}", e)
+                match client
+                    .write_plugin_message(
+                        VOICECHAT_REQUEST_SECRET_CHANNEL,
+                        SecretRequest {
+                            compat_version: VOICECHAT_COMPAT_VERSION,
+                        },
+                    )
+                    .await
+                {
+                    Ok(_) => {
+                        info!("Sent secret request")
+                    }
+                    Err(e) => error!("Could not send secret request: {}", e),
                 }
             }
             VOICECHAT_SECRET_CHANNEL => {
