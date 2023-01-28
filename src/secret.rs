@@ -16,14 +16,14 @@ pub struct SecretRequest {
 
 #[derive(Clone, Debug, McBufReadable)]
 pub struct SecretResponse {
-    secret: uuid::Uuid,
-    port: i32,
-    player: uuid::Uuid,
-    codec: u8,
-    mtu_size: i32,
-    voice_chat_distance: f64,
-    keep_alive: i32,
-    groups_enabled: bool,
-    voice_host: String,
-    allow_recording: bool,
+    pub secret: uuid::Uuid,
+    pub port: i32,
+    pub player: uuid::Uuid,
+    pub codec: u8,
+    pub mtu_size: i32,
+    pub voice_chat_distance: f64,
+    pub keep_alive: i32,
+    pub groups_enabled: bool,
+    pub voice_host: String,
+    pub allow_recording: bool,
 }

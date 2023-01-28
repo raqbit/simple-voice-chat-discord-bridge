@@ -1,12 +1,14 @@
 use std::error;
 use std::io::Cursor;
+use std::ops::Deref;
+use std::sync::{Arc, RwLock};
 
 use async_trait::async_trait;
 use azalea::prelude::*;
 use azalea_buf::{McBufReadable, McBufWritable, UnsizedByteArray};
 use azalea_core::ResourceLocation;
-use azalea_protocol::packets::game::serverbound_custom_payload_packet::ServerboundCustomPayloadPacket;
 use azalea_protocol::packets::game::{ClientboundGamePacket, ServerboundGamePacket};
+use azalea_protocol::packets::game::serverbound_custom_payload_packet::ServerboundCustomPayloadPacket;
 use const_format::formatcp;
 use log::{error, info};
 
@@ -19,7 +21,6 @@ mod respawn;
 mod secret;
 mod shutdown;
 
-#[macro_use]
 mod resource_location;
 
 const MINECRAFT_NAMESPACE: &str = "minecraft";
@@ -82,7 +83,9 @@ impl ClientPMExt for Client {
 }
 
 #[derive(Default, Clone)]
-pub struct State {}
+pub struct State {
+    voice_secret: Arc<RwLock<Option<uuid::Uuid>>>,
+}
 
 async fn handle(client: Client, event: Event, state: State) -> anyhow::Result<()> {
     match event {
@@ -90,15 +93,15 @@ async fn handle(client: Client, event: Event, state: State) -> anyhow::Result<()
             info!("{}", m.message().to_ansi(None));
         }
         Event::Packet(packet) => {
-            handle_packet(client, state, packet).await;
+            handle_packet(client, state, packet.deref()).await;
         }
         _ => {}
     }
     Ok(())
 }
 
-async fn handle_packet(client: Client, state: State, pkt: Box<ClientboundGamePacket>) {
-    if let ClientboundGamePacket::CustomPayload(packet) = *pkt {
+async fn handle_packet(client: Client, state: State, pkt: &ClientboundGamePacket) {
+    if let ClientboundGamePacket::CustomPayload(packet) = pkt {
         match packet.identifier.to_string().as_str() {
             MINECRAFT_BRAND_CHANNEL => {
                 match client
@@ -119,7 +122,12 @@ async fn handle_packet(client: Client, state: State, pkt: Box<ClientboundGamePac
             VOICECHAT_SECRET_CHANNEL => {
                 match SecretResponse::read_from(&mut Cursor::new(&*packet.data)) {
                     Ok(resp) => {
-                        info!("Secret response: {:?}", resp)
+                        state
+                            .voice_secret
+                            .write()
+                            .expect("could not write voice secret")
+                            .replace(resp.secret);
+                        info!("Received voice secret & settings")
                     }
                     Err(e) => {
                         error!("Could not parse secret response: {}", e)

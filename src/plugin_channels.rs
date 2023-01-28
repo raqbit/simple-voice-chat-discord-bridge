@@ -58,7 +58,7 @@ impl Plugin {
                         self.required_plugins
                             .into_iter()
                             .collect::<Vec<&str>>()
-                            .join(",")
+                            .join(", ")
                     )
                 }
             }
