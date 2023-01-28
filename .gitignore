@@ -2,3 +2,8 @@
 server/
 # Minecraft auth data
 .auth.json
+
+
+# Added by cargo
+
+/target

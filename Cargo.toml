@@ -1,0 +1,26 @@
+[package]
+name = "simple-voice-chat-discord-bridge"
+version = "0.1.0"
+edition = "2021"
+
+[profile.dev]
+opt-level = 1
+[profile.dev.package."*"]
+opt-level = 3
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+azalea = "0.4.0"
+azalea-protocol = "0.4.0"
+azalea-core = "0.4.0"
+azalea-buf = "0.4.0"
+anyhow = "1.0.68"
+async-trait = "0.1.61"
+const_format = "0.2.30"
+env_logger = "0.10.0"
+log = "0.4.17"
+tokio = "1.24.1"
+uuid = "1.2.2"
+#[patch.crates-io]
+#azalea = { path = "../azalea/azalea" }
