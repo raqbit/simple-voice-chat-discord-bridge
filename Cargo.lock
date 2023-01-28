@@ -419,6 +419,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "bridge"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "azalea",
+ "azalea-buf",
+ "azalea-core",
+ "azalea-protocol",
+ "const_format",
+ "env_logger",
+ "log",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
 name = "bumpalo"
 version = "3.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1596,23 +1613,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e51e73328dc4ac0c7ccbda3a494dfa03df1de2f46018127f60c693f2648455b0"
 dependencies = [
  "libc",
-]
-
-[[package]]
-name = "simple-voice-chat-discord-bridge"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "azalea",
- "azalea-buf",
- "azalea-core",
- "azalea-protocol",
- "const_format",
- "env_logger",
- "log",
- "tokio",
- "uuid",
 ]
 
 [[package]]
