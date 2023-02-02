@@ -1,27 +1,23 @@
-use std::error;
 use std::io::Cursor;
 use std::ops::Deref;
 use std::sync::{Arc, RwLock};
 
-use async_trait::async_trait;
 use azalea::prelude::*;
-use azalea_buf::{McBufReadable, McBufWritable, UnsizedByteArray};
-use azalea_core::ResourceLocation;
-use azalea_protocol::packets::game::{ClientboundGamePacket, ServerboundGamePacket};
-use azalea_protocol::packets::game::serverbound_custom_payload_packet::ServerboundCustomPayloadPacket;
+use azalea_buf::{McBufReadable};
+use azalea_protocol::packets::game::ClientboundGamePacket;
 use const_format::formatcp;
 use log::{error, info};
 
+use crate::plugin_message::ClientPluginMessageExt;
 use crate::secret::{
     SecretRequest, SecretResponse, VOICECHAT_REQUEST_SECRET_CHANNEL, VOICECHAT_SECRET_CHANNEL,
 };
 
 mod plugin_channels;
+mod plugin_message;
 mod respawn;
 mod secret;
 mod shutdown;
-
-mod resource_location;
 
 const MINECRAFT_NAMESPACE: &str = "minecraft";
 const MINECRAFT_BRAND_CHANNEL: &str = resource_location!(MINECRAFT_NAMESPACE, "brand");
@@ -51,40 +47,29 @@ async fn main() {
     .unwrap_or_else(|e| println!("Could not start bot: {}", e))
 }
 
-#[async_trait]
-pub trait ClientPMExt {
-    async fn write_plugin_message<T: McBufWritable + Send>(
-        self,
-        identifier: &str,
-        data: T,
-    ) -> Result<(), Box<dyn error::Error>>;
+struct VoiceSettings {
+    secret: uuid::Uuid,
+    player: uuid::Uuid,
+    host: String,
+    port: i32,
+    groups_enabled: bool,
 }
 
-#[async_trait]
-impl ClientPMExt for Client {
-    async fn write_plugin_message<T: McBufWritable + Send>(
-        self,
-        identifier: &str,
-        data: T,
-    ) -> Result<(), Box<dyn error::Error>> {
-        let mut buf = Vec::new();
-        data.write_into(&mut buf)?;
-
-        let identifier = ResourceLocation::new(identifier)?;
-
-        let packet = ServerboundCustomPayloadPacket {
-            identifier,
-            data: UnsizedByteArray::from(buf),
+impl From<SecretResponse> for VoiceSettings {
+    fn from(resp: SecretResponse) -> Self {
+        return Self {
+            secret: resp.secret,
+            player: resp.player,
+            host: resp.voice_host,
+            port: resp.port,
+            groups_enabled: resp.groups_enabled,
         };
-        self.write_packet(ServerboundGamePacket::CustomPayload(packet))
-            .await?;
-        Ok(())
     }
 }
 
 #[derive(Default, Clone)]
 pub struct State {
-    voice_secret: Arc<RwLock<Option<uuid::Uuid>>>,
+    voice_settings: Arc<RwLock<Option<VoiceSettings>>>,
 }
 
 async fn handle(client: Client, event: Event, state: State) -> anyhow::Result<()> {
@@ -113,9 +98,7 @@ async fn handle_packet(client: Client, state: State, pkt: &ClientboundGamePacket
                     )
                     .await
                 {
-                    Ok(_) => {
-                        info!("Sent secret request")
-                    }
+                    Ok(_) => info!("Sent secret request"),
                     Err(e) => error!("Could not send secret request: {}", e),
                 }
             }
@@ -123,15 +106,13 @@ async fn handle_packet(client: Client, state: State, pkt: &ClientboundGamePacket
                 match SecretResponse::read_from(&mut Cursor::new(&*packet.data)) {
                     Ok(resp) => {
                         state
-                            .voice_secret
+                            .voice_settings
                             .write()
-                            .expect("could not write voice secret")
-                            .replace(resp.secret);
-                        info!("Received voice secret & settings")
+                            .expect("could not write voice settings")
+                            .replace(resp.into());
+                        info!("Received voice secret & settings");
                     }
-                    Err(e) => {
-                        error!("Could not parse secret response: {}", e)
-                    }
+                    Err(e) => error!("Could not parse secret response: {}", e),
                 }
             }
             _ => {}
