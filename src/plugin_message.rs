@@ -39,8 +39,7 @@ impl ClientPluginMessageExt for Client {
             identifier,
             data: UnsizedByteArray::from(buf),
         };
-        self.write_packet(ServerboundGamePacket::CustomPayload(packet))
-            .await?;
+        self.write_packet(ServerboundGamePacket::CustomPayload(packet));
         Ok(())
     }
 }

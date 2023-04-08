@@ -3,7 +3,7 @@ use std::ops::Deref;
 use std::sync::{Arc, RwLock};
 
 use azalea::prelude::*;
-use azalea_buf::{McBufReadable};
+use azalea_buf::McBufReadable;
 use azalea_protocol::packets::game::ClientboundGamePacket;
 use const_format::formatcp;
 use log::{error, info};
@@ -13,11 +13,12 @@ use crate::secret::{
     SecretRequest, SecretResponse, VOICECHAT_REQUEST_SECRET_CHANNEL, VOICECHAT_SECRET_CHANNEL,
 };
 
-mod plugin_channels;
+// mod plugin_channels;
 mod plugin_message;
 mod respawn;
 mod secret;
-mod shutdown;
+// mod shutdown;
+// mod voice;
 
 const MINECRAFT_NAMESPACE: &str = "minecraft";
 const MINECRAFT_BRAND_CHANNEL: &str = resource_location!(MINECRAFT_NAMESPACE, "brand");
@@ -29,22 +30,17 @@ async fn main() {
     env_logger::init();
     let account = Account::offline("Raqbot");
 
-    azalea::start(azalea::Options {
-        account,
-        address: "localhost:25565",
-        plugins: plugins![
-            respawn::Plugin::default(),
-            plugin_channels::Plugin::require_plugins(vec![
-                VOICECHAT_REQUEST_SECRET_CHANNEL,
-                VOICECHAT_SECRET_CHANNEL
-            ]),
-            shutdown::Plugin::default()
-        ],
-        state: State::default(),
-        handle,
-    })
-    .await
-    .unwrap_or_else(|e| println!("Could not start bot: {}", e))
+    ClientBuilder::new()
+        .set_handler(handle)
+        .add_plugin(respawn::Plugin)
+        // .add_plugin(plugin_channels::Plugin::require_plugins(vec![
+        //     VOICECHAT_REQUEST_SECRET_CHANNEL,
+        //     VOICECHAT_SECRET_CHANNEL
+        // ]))
+        // .add_plugin(shutdown::Plugin::default())
+        .start(account, "localhost:25565")
+        .await
+        .unwrap_or_else(|e| println!("Could not start bot: {}", e));
 }
 
 struct VoiceSettings {
@@ -67,7 +63,7 @@ impl From<SecretResponse> for VoiceSettings {
     }
 }
 
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Component)]
 pub struct State {
     voice_settings: Arc<RwLock<Option<VoiceSettings>>>,
 }
@@ -75,7 +71,7 @@ pub struct State {
 async fn handle(client: Client, event: Event, state: State) -> anyhow::Result<()> {
     match event {
         Event::Chat(m) => {
-            info!("{}", m.message().to_ansi(None));
+            info!("{}", m.message().to_ansi());
         }
         Event::Packet(packet) => {
             handle_packet(client, state, packet.deref()).await;
