@@ -33,7 +33,7 @@ impl ClientPluginMessageExt for Client {
         let mut buf = Vec::new();
         data.write_into(&mut buf)?;
 
-        let identifier = ResourceLocation::new(identifier)?;
+        let identifier = ResourceLocation::new(identifier);
 
         let packet = ServerboundCustomPayloadPacket {
             identifier,

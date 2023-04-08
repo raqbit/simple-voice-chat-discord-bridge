@@ -1,10 +1,10 @@
 //! Automatically respawn when we die
 
 use async_trait::async_trait;
-use azalea::ecs::app::App;
+use azalea::app::App;
 use azalea::ecs::query::Added;
 use azalea::ecs::system::Query;
-use azalea::entity::{Dead, Local};
+use azalea::entity::Dead;
 use azalea_client::LocalPlayer;
 use azalea_protocol::packets::game::serverbound_client_command_packet::{
     Action, ServerboundClientCommandPacket,
@@ -14,7 +14,7 @@ use azalea_protocol::packets::game::ServerboundGamePacket;
 pub struct Plugin;
 
 #[async_trait]
-impl azalea_ecs::app::Plugin for Plugin {
+impl azalea::app::Plugin for Plugin {
     fn build(&self, app: &mut App) {
         app.add_system(respawn_listener);
     }
