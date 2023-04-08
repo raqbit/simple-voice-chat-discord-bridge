@@ -27,10 +27,6 @@ uuid = "1.2.2"
 git = "https://github.com/mat-1/azalea"
 branch = "1.19.2"
 
-[dependencies.azalea-ecs]
-git = "https://github.com/mat-1/azalea"
-branch = "1.19.2"
-
 [dependencies.azalea-client]
 git = "https://github.com/mat-1/azalea"
 branch = "1.19.2"

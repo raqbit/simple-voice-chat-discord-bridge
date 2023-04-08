@@ -14,7 +14,7 @@ use azalea_protocol::packets::game::ServerboundGamePacket;
 pub struct Plugin;
 
 #[async_trait]
-impl azalea_ecs::app::Plugin for Plugin {
+impl azalea::ecs::app::Plugin for Plugin {
     fn build(&self, app: &mut App) {
         app.add_system(respawn_listener);
     }
