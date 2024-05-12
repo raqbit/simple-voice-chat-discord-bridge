@@ -1,10 +1,11 @@
+from __future__ import annotations
+
 import uuid
 from dataclasses import dataclass
-from typing import Optional, Dict
 
-from bridge.voice.packets import Decodable
-from .packet import EncodablePacket, DecodablePacket
 from bridge.util.encodable import Buffer
+from bridge.voice.packets import Decodable
+from .packet import DecodablePacket, EncodablePacket
 
 NAMESPACE = "voicechat"
 
@@ -19,7 +20,7 @@ class RequestSecretPacket(EncodablePacket, DecodablePacket):
         return Buffer.pack("i", self.compat_version)
 
     @classmethod
-    def from_buf(cls, buf: Buffer) -> "RequestSecretPacket":
+    def from_buf(cls, buf: Buffer) -> RequestSecretPacket:
         compat_version = buf.unpack("i")
 
         return cls(
@@ -47,15 +48,17 @@ class SecretPacket(EncodablePacket, DecodablePacket):
 
     def to_buf(self) -> bytes:
         return Buffer.pack_uuid(self.secret) + \
-               Buffer.pack("i", self.port) + \
-               Buffer.pack_uuid(self.player) + \
-               Buffer.pack("ciddddi?", self.codec, self.mtu, self.dist, self.fade_dist, self.crouch_dist,
-                           self.whisper_dist, self.keep_alive, self.groups_enabled) + \
-               Buffer.pack_string(self.host) + \
-               Buffer.pack("?", self.allow_recording)
+            Buffer.pack("i", self.port) + \
+            Buffer.pack_uuid(self.player) + \
+            Buffer.pack(
+                "ciddddi?", self.codec, self.mtu, self.dist, self.fade_dist, self.crouch_dist,
+                self.whisper_dist, self.keep_alive, self.groups_enabled
+            ) + \
+            Buffer.pack_string(self.host) + \
+            Buffer.pack("?", self.allow_recording)
 
     @classmethod
-    def from_buf(cls, buff: Buffer) -> "SecretPacket":
+    def from_buf(cls, buff: Buffer) -> SecretPacket:
         secret = buff.unpack_uuid()
         port = buff.unpack("i")
         player = buff.unpack_uuid()
@@ -94,7 +97,7 @@ class ClientGroup(Decodable):
     has_password: bool
 
     @classmethod
-    def from_buf(cls, buf: Buffer) -> "ClientGroup":
+    def from_buf(cls, buf: Buffer) -> ClientGroup:
         identifier = buf.unpack_uuid()
         name = buf.unpack_string()
         has_password = buf.unpack("?")
@@ -111,10 +114,10 @@ class PlayerState(Decodable):
     name: str
     disabled: bool
     disconnected: bool
-    group: Optional[ClientGroup]
+    group: ClientGroup | None
 
     @classmethod
-    def from_buf(cls, buf: Buffer) -> "PlayerState":
+    def from_buf(cls, buf: Buffer) -> PlayerState:
         disabled = buf.unpack("?")
         disconnected = buf.unpack("?")
         player_uuid = buf.unpack_uuid()
@@ -144,7 +147,7 @@ class UpdateStatePacket(EncodablePacket, DecodablePacket):
         return Buffer.pack("??", self.disconnected, self.disabled)
 
     @classmethod
-    def from_buf(cls, buf: Buffer) -> "UpdateStatePacket":
+    def from_buf(cls, buf: Buffer) -> UpdateStatePacket:
         disconnected = buf.unpack("?")
         disabled = buf.unpack("?")
 
@@ -161,7 +164,7 @@ class PlayerStatePacket(DecodablePacket):
     state: PlayerState
 
     @classmethod
-    def from_buf(cls, buf: Buffer) -> "PlayerStatePacket":
+    def from_buf(cls, buf: Buffer) -> PlayerStatePacket:
         state = PlayerState.from_buf(buf)
 
         return cls(
@@ -173,10 +176,10 @@ class PlayerStatePacket(DecodablePacket):
 class PlayerStatesPacket(DecodablePacket):
     CHANNEL = f"{NAMESPACE}:player_states"
 
-    states: Dict[uuid.UUID, PlayerState]
+    states: dict[uuid.UUID, PlayerState]
 
     @classmethod
-    def from_buf(cls, buf: Buffer) -> "PlayerStatesPacket":
+    def from_buf(cls, buf: Buffer) -> PlayerStatesPacket:
         states = {}
 
         count = buf.unpack("i")
@@ -195,7 +198,7 @@ class CreateGroupPacket(EncodablePacket, DecodablePacket):
     CHANNEL = f"{NAMESPACE}:create_group"
 
     name: str
-    password: Optional[str]
+    password: str | None
 
     def to_buf(self) -> bytes:
         buf = Buffer.pack_string(self.name)
@@ -209,7 +212,7 @@ class CreateGroupPacket(EncodablePacket, DecodablePacket):
         return buf
 
     @classmethod
-    def from_buf(cls, buf: Buffer) -> "CreateGroupPacket":
+    def from_buf(cls, buf: Buffer) -> CreateGroupPacket:
         name = buf.unpack_string()
 
         password = None
@@ -227,13 +230,13 @@ class JoinGroupPacket(EncodablePacket, DecodablePacket):
     CHANNEL = f"{NAMESPACE}:set_group"
 
     group: uuid.UUID
-    password: Optional[str]
+    password: str | None
 
     def to_buf(self) -> bytes:
         raise NotImplementedError
 
     @classmethod
-    def from_buf(cls, buf: Buffer) -> "JoinGroupPacket":
+    def from_buf(cls, buf: Buffer) -> JoinGroupPacket:
         group = buf.unpack_uuid()
 
         password = None
@@ -254,7 +257,7 @@ class LeaveGroupPacket(EncodablePacket, DecodablePacket):
         return b""
 
     @classmethod
-    def from_buf(cls, buf: Buffer) -> 'LeaveGroupPacket':
+    def from_buf(cls, buf: Buffer) -> LeaveGroupPacket:
         return cls()
 
 
@@ -262,11 +265,11 @@ class LeaveGroupPacket(EncodablePacket, DecodablePacket):
 class JoinedGroupPacket(DecodablePacket):
     CHANNEL = f"{NAMESPACE}:joined_group"
 
-    group: Optional[ClientGroup]
+    group: ClientGroup | None
     wrong_password: bool
 
     @classmethod
-    def from_buf(cls, buf: Buffer) -> "JoinedGroupPacket":
+    def from_buf(cls, buf: Buffer) -> JoinedGroupPacket:
         group = None
         if buf.unpack("?"):
             group = ClientGroup.from_buf(buf)

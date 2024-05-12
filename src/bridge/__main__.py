@@ -1,7 +1,6 @@
 import asyncio
 import logging
 import os
-from typing import Optional
 
 import discord
 from discord import VoiceClient
@@ -10,21 +9,22 @@ from twisted.internet import reactor
 
 from bridge.minecraft.auth import refresh_auth as refresh_minecraft_auth
 from bridge.minecraft.client import MinecraftClientFactory
+
 from . import audio
 from .audio.process import AudioProcessThread
 from .discord_bot import setup_commands
 
 
-class DiscordMinecraftBridge():
+class DiscordMinecraftBridge:
 
     def __init__(
             self,
             mc_host: str,
             mc_port: int,
             discord_bot_token: str,
-            mc_uuid: Optional[str] = None,
-            mc_name: Optional[str] = None,
-            mc_token: Optional[str] = None
+            mc_uuid: str | None = None,
+            mc_name: str | None = None,
+            mc_token: str | None = None
     ):
         self.mc_host = mc_host
         self.mc_port = mc_port
@@ -116,7 +116,7 @@ def main(argv):
     parser.add_argument("-p", "--port", default=25565, type=int)
     args = parser.parse_args(argv)
 
-    logger = logging.getLogger(f"main")
+    logger = logging.getLogger("main")
     logger.setLevel(logging.INFO)
 
     logging.basicConfig()

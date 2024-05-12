@@ -1,7 +1,7 @@
-from typing import Callable
+from collections.abc import Callable
 
 import discord.client
-from discord import slash_command, ApplicationContext, option, VoiceClient, sinks
+from discord import ApplicationContext, VoiceClient, option, sinks, slash_command
 
 
 class VoiceBridgeAudioSink(sinks.Sink):
@@ -20,7 +20,6 @@ class VoiceBridgeCog(discord.Cog):
 
     def __init__(self, on_voice_received: Callable):
         self.sink = VoiceBridgeAudioSink(on_voice_received)
-        pass
 
     @slash_command(name="join", description="Makes the bot join the given voice chat", guild_ids=['272461623241736193'])
     @option("channel", description="Select a channel")

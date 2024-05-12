@@ -1,13 +1,21 @@
 import uuid
-from typing import Callable
+from collections.abc import Callable
 
 from twisted.internet import reactor
 from twisted.internet.protocol import DatagramProtocol
 
 from bridge.util.encodable import Buffer
-from bridge.voice.packets import MicPacket, AuthenticateAckPacket, GroupSoundPacket, KeepAlivePacket, PingPacket, \
-    AuthenticatePacket, EncodableVoicePacket
 from bridge.voice import decode_voice_packet, encode_client_sent_voice_packet
+from bridge.voice.packets import (
+    AuthenticateAckPacket,
+    AuthenticatePacket,
+    EncodableVoicePacket,
+    GroupSoundPacket,
+    KeepAlivePacket,
+    MicPacket,
+    PingPacket,
+)
+
 
 class VoiceConnection(DatagramProtocol):
     host: str

@@ -1,11 +1,11 @@
 import json
-from typing import Callable
+from collections.abc import Callable
 
 from minecraft_launcher_lib import microsoft_account
 
 FILE_NAME = ".auth.json"
 
-class AuthDetails():
+class AuthDetails:
     id: str
     name: str
     refresh_token: str
@@ -27,7 +27,7 @@ def _save_auth_details(auth_details: AuthDetails):
         json.dump(auth_details.to_dict(), f, ensure_ascii=False, indent=4)
 
 def _load_auth_details() -> AuthDetails:
-    with open(FILE_NAME, "r", encoding="utf-8") as f:
+    with open(FILE_NAME, encoding="utf-8") as f:
         json_data = json.load(f)
         return AuthDetails(json_data)
 

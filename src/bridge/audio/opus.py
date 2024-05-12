@@ -1,8 +1,8 @@
 import enum
-from typing import Any, Optional
+from typing import Any
 
-from opuslib import Encoder, APPLICATION_VOIP
-from opuslib.api import decoder, ctl
+from opuslib import APPLICATION_VOIP, Encoder
+from opuslib.api import ctl, decoder
 
 
 class OpusDecoder:
@@ -28,7 +28,7 @@ class OpusDecoder:
             return self._decode(None, 0)
         return self._decode(data, len(data))
 
-    def _decode(self, opus_data: Optional[bytes], data_len: int) -> bytes:
+    def _decode(self, opus_data: bytes | None, data_len: int) -> bytes:
         return decoder.decode(
             self.decoder_state,
             opus_data,

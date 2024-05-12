@@ -15,7 +15,7 @@ class RegisterPacket(Decodable):
         raise NotImplementedError
 
     @classmethod
-    def from_buf(cls, buf: Buffer) -> 'RegisterPacket':
+    def from_buf(cls, buf: Buffer) -> RegisterPacket:
         data = buf.read()
 
         channels = []
@@ -40,7 +40,7 @@ class BrandPacket(Decodable):
         raise NotImplementedError
 
     @classmethod
-    def from_buf(cls, buf: Buffer) -> 'BrandPacket':
+    def from_buf(cls, buf: Buffer) -> BrandPacket:
         brand = buf.unpack_string()
 
         return cls(brand=brand)

@@ -1,17 +1,24 @@
 import logging
 import uuid
-from typing import Optional, Callable
+from collections.abc import Callable
 
 from quarry.net import auth
-from quarry.net.client import SpawningClientProtocol, ClientFactory
+from quarry.net.client import ClientFactory, SpawningClientProtocol
 from quarry.types.uuid import UUID
 from twisted.internet import reactor
-from twisted.internet.interfaces import IListeningPort, IAddress
+from twisted.internet.interfaces import IAddress, IListeningPort
 from twisted.internet.tcp import Connector
 
 from bridge import voice
-from bridge.minecraft.packets import RegisterPacket, BrandPacket, SecretPacket, CreateGroupPacket, RequestSecretPacket, \
-    UpdateStatePacket, EncodablePacket
+from bridge.minecraft.packets import (
+    BrandPacket,
+    CreateGroupPacket,
+    EncodablePacket,
+    RegisterPacket,
+    RequestSecretPacket,
+    SecretPacket,
+    UpdateStatePacket,
+)
 from bridge.util.encodable import Buffer
 from bridge.voice.client import VoiceConnection
 
@@ -23,8 +30,8 @@ used_plugin_channels = {'voicechat:player_state', 'voicechat:secret', 'voicechat
 
 class MinecraftClient(SpawningClientProtocol):
     server_host: str
-    voice: Optional[VoiceConnection]
-    voice_listener: Optional[IListeningPort]
+    voice: VoiceConnection | None
+    voice_listener: IListeningPort | None
 
     def __init__(self, factory: 'MinecraftClientFactory', addr: IAddress, host: str):
         super().__init__(factory, addr)
@@ -120,11 +127,11 @@ class MinecraftClientFactory(ClientFactory):
     protocol = MinecraftClient
     server_host: str
 
-    on_mc_voice_data: Optional[Callable[[bytes], None]]
+    on_mc_voice_data: Callable[[bytes], None] | None
 
-    client: Optional[MinecraftClient]
+    client: MinecraftClient | None
 
-    def __init__(self, host, _uuid: Optional[str], name: str, token: Optional[str], on_audio: Optional[Callable[[bytes], None]]):
+    def __init__(self, host, _uuid: str | None, name: str, token: str | None, on_audio: Callable[[bytes], None] | None):
         if _uuid is None or token is None:
             profile = auth.OfflineProfile("VoiceChatBridge")
         else:
@@ -147,12 +154,12 @@ class MinecraftClientFactory(ClientFactory):
 
     def clientConnectionFailed(self, connector: Connector, reason):
         super().clientConnectionFailed(connector, reason)
-        self.logger.warning(f"Connection failed")
+        self.logger.warning("Connection failed")
         # connector.connect()
 
     def clientConnectionLost(self, connector: Connector, reason):
         super().clientConnectionLost(connector, reason)
-        self.logger.warning(f"Connection lost")
+        self.logger.warning("Connection lost")
         # TODO: backoff / do not retry if banned or something
         # connector.connect()
 

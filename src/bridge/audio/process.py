@@ -1,10 +1,10 @@
 import queue
 import struct
 import threading
+from collections.abc import Callable
 from functools import cached_property
-from typing import Callable
 
-from bridge.audio.opus import OpusDecoder, OpusEncoder, EncodingApplication
+from bridge.audio.opus import EncodingApplication, OpusDecoder, OpusEncoder
 
 
 class AudioProcessThread(threading.Thread):

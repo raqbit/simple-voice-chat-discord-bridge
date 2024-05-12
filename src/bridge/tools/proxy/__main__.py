@@ -1,25 +1,38 @@
 import uuid
 
 from cryptography.hazmat.primitives.ciphers import Cipher
-from quarry.net.proxy import DownstreamFactory, Bridge
+from quarry.net.proxy import Bridge, DownstreamFactory
 from transmitm import Tap, UDPProxy
 from twisted.internet import reactor
 
 from bridge.audio.opus import OpusDecoder
-from bridge.minecraft.packets import RegisterPacket, \
-    BrandPacket, RequestSecretPacket, \
-    SecretPacket, PlayerStatePacket, \
-    PlayerStatesPacket, UpdateStatePacket, \
-    JoinedGroupPacket, CreateGroupPacket, \
-    JoinGroupPacket, LeaveGroupPacket, \
-    EncodablePacket, PlayerState
+from bridge.minecraft.packets import (
+    BrandPacket,
+    CreateGroupPacket,
+    EncodablePacket,
+    JoinedGroupPacket,
+    JoinGroupPacket,
+    LeaveGroupPacket,
+    PlayerState,
+    PlayerStatePacket,
+    PlayerStatesPacket,
+    RegisterPacket,
+    RequestSecretPacket,
+    SecretPacket,
+    UpdateStatePacket,
+)
 from bridge.util.encodable import Buffer
-from bridge.voice.encoding import decode_voice_packet, decode_client_sent_voice_packet
-from bridge.voice.packets import MicPacket, \
-    KeepAlivePacket, PingPacket, \
-    PlayerSoundPacket, GroupSoundPacket, \
-    LocationSoundPacket, AuthenticatePacket, \
-    AuthenticateAckPacket
+from bridge.voice.encoding import decode_client_sent_voice_packet, decode_voice_packet
+from bridge.voice.packets import (
+    AuthenticateAckPacket,
+    AuthenticatePacket,
+    GroupSoundPacket,
+    KeepAlivePacket,
+    LocationSoundPacket,
+    MicPacket,
+    PingPacket,
+    PlayerSoundPacket,
+)
 
 
 class VoiceInterceptor(Tap):
@@ -147,7 +160,6 @@ class MinecraftProxyBridge(Bridge):
             print(f"{prefix} JoinGroup group={pkt.group} password={pkt.password}")
         elif channel == LeaveGroupPacket.CHANNEL:
             print(f"{prefix} LeaveGroup")
-            pass
 
     def _handle_downstream(self, channel: str, buf: Buffer, prefix: str):
         if channel == RegisterPacket.CHANNEL:
@@ -159,7 +171,7 @@ class MinecraftProxyBridge(Bridge):
         elif channel == SecretPacket.CHANNEL:
             pkt = SecretPacket.from_buf(buf)
             print(
-                (
+
                     f"{prefix} Secret "
                     f"secret={pkt.secret} "
                     f"port={pkt.port} "
@@ -171,7 +183,7 @@ class MinecraftProxyBridge(Bridge):
                     f"whisper_dist={pkt.whisper_dist} "
                     f"keep_alive={pkt.keep_alive} "
                     f"groups_enabled={pkt.groups_enabled}"
-                ))
+                )
             self._intercept_voice(pkt)
             return
         elif channel == PlayerStatesPacket.CHANNEL:

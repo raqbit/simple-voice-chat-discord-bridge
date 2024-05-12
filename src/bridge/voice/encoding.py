@@ -2,7 +2,7 @@ import os
 import uuid
 
 from cryptography.hazmat.primitives import padding
-from cryptography.hazmat.primitives.ciphers import modes, algorithms, Cipher
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
 from bridge.util.encodable import Buffer
 

@@ -1,9 +1,10 @@
 import os
 import sys
 
+from minecraft_launcher_lib import microsoft_account
+
 from bridge.minecraft.auth import do_auth_flow as do_minecraft_auth_flow
 
-from minecraft_launcher_lib import microsoft_account
 
 def prompt_for_url_input(login_url: str) -> str:
     print(f"Please open {login_url} in your browser and copy the url you are redirected into the prompt below:")
